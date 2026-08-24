@@ -7,8 +7,8 @@ import {
 import { normalizeUserRoles } from "./sidecarUserRoles";
 
 // The launcher runs on every form OnLoad and writes the current record context
-// here; the already-open side pane watches this key so navigation updates the
-// live conversation without recreating the pane (which would reset the chat).
+// here. The pane reads the latest value only when the user sends a message or
+// explicitly starts a new conversation.
 const SIDECAR_CONTEXT_KEY_PREFIX = "maftagsc.sidecar.context.";
 
 interface FormEntity {

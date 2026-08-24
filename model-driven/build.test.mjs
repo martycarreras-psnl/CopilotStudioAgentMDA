@@ -94,7 +94,10 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /createContextEnvelope\(currentContext, originalText, configuration\)/);
     assert.match(source, /resolveContext\(activeContext, activeConfiguration\)/);
     assert.match(source, /readSharedContext\(configuration, fallback\)/);
-    assert.match(source, /startNavigationWatcher\(store, configuration, context\)/);
+    assert.doesNotMatch(source, /startNavigationWatcher/);
+    assert.match(source, /sendContextOnConnect && action\.type === "DIRECT_LINE\/CONNECT_FULFILLED"/);
+    assert.match(source, /action\.type === "WEB_CHAT\/SEND_MESSAGE"/);
+    assert.match(source, /activeConfiguration,\s+true/);
     assert.match(source, /await sidecarConfigurationRepository\.getByAppId\(appId\)/);
 });
 
@@ -112,14 +115,13 @@ test("signed-in user security roles flow into the agent context", async () => {
     assert.match(launcherSource, /roles: getUserRoles\(\)/);
     assert.match(launcherSource, /normalizeUserRoles/);
 
-    // Pane parses, reads shared roles, signs on them, and surfaces them in both
-    // the pvaSetContext event and the trusted per-message envelope.
+    // Pane parses, reads shared roles, signs on them, and surfaces them in the
+    // user-initiated pvaSetContext event and the trusted per-message envelope.
     assert.match(paneSource, /roles: normalizeUserRoles\(value\.roles\)/);
     assert.match(paneSource, /parsed\.roles !== undefined \? normalizeUserRoles\(parsed\.roles\) : fallback\.roles/);
-    assert.match(paneSource, /context\.roles\.join\(","\)/);
     assert.match(paneSource, /formatUserRolesLine\(context\.roles\)/);
     assert.match(paneSource, /CurrentUserRoles: serializeUserRoles\(context\.roles\)/);
-    assert.match(paneSource, /CurrentUserRoles: serializeUserRoles\(next\.roles\)/);
+    assert.doesNotMatch(paneSource, /CurrentUserRoles: serializeUserRoles\(next\.roles\)/);
 
     // Roles are de-duplicated and bounded; only role names are handled.
     assert.match(rolesSource, /MAX_USER_ROLES/);

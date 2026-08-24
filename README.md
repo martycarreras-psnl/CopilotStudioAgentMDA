@@ -7,7 +7,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 ## What's new
 
 - **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context (and are also exposed as a `CurrentUserRoles` variable for topic branching), so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
-- **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, refreshing the agent's context without resetting the chat.
+- **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
 - **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
 
 ## What you get
@@ -124,7 +124,7 @@ sequenceDiagram
 
 ## Context synchronization
 
-The pane is deliberately long-lived. Navigating to another form does not destroy and recreate it, because doing so would lose the conversation. Instead, the launcher writes the authoritative form context on every navigation and the pane reads it immediately before every message — and pushes an update into the live conversation the moment the record or screen changes.
+The pane is deliberately long-lived. Navigating to another form does not destroy and recreate it, because doing so would lose the conversation. Instead, the launcher writes the authoritative form context locally on every navigation and the pane reads it immediately before each user message or explicit new-conversation action. Navigation by itself sends nothing to the agent.
 
 The context includes:
 
@@ -138,7 +138,7 @@ The context includes:
 
 Two mechanisms deliver that context to the agent:
 
-1. A `pvaSetContext` event updates Copilot Studio conversation variables (also pushed proactively on navigation).
+1. A `pvaSetContext` event updates Copilot Studio conversation variables when the user sends a message or explicitly starts a new conversation.
 2. A trusted, bounded context envelope accompanies every outbound user message.
 
 The primary record name is accepted only when the form's table and normalized record ID match the current page context, so a record name from the previously viewed screen never leaks into the next question.
@@ -221,7 +221,7 @@ Using the sidecar needs nothing beyond the setup steps above. Contributors who w
 ## Design principles
 
 - One stable pane per app, so navigation never creates duplicate conversations.
-- Refresh context on every navigation and before every message, instead of trusting launch-time context.
+- Capture context locally on every navigation and deliver the latest value only with a user prompt or explicit new conversation.
 - Treat record IDs as pointers, never as authorization or knowledge content.
 - Preserve delegated identity end to end; the agent answers as the signed-in user and stays within their permissions.
 - Never include unrelated business data, tokens, or connector payloads in prompts or logs.

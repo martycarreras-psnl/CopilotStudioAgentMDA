@@ -104,7 +104,6 @@ let activeToken: string | null = null;
 let activeContext: LaunchContext | null = null;
 let activeConfiguration: SidecarConfiguration | null = null;
 let resetInProgress = false;
-let navigationWatcher: number | null = null;
 
 function getRequiredElement<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
@@ -260,16 +259,6 @@ function resolveContext(
     configuration: SidecarConfiguration
 ): LaunchContext {
     return readSharedContext(configuration, fallback) ?? getCurrentContext(fallback, configuration);
-}
-
-function contextSignature(context: LaunchContext): string {
-    return [
-        context.pageType,
-        context.entityName,
-        context.recordId ?? "",
-        context.recordName,
-        context.roles.join(",")
-    ].join("|");
 }
 
 function setStatus(message: string, isError = false): void {
@@ -518,11 +507,12 @@ function createContextEnvelope(
 function createContextStore(
     webChat: WebChatApi,
     getContext: () => LaunchContext,
-    configuration: SidecarConfiguration
+    configuration: SidecarConfiguration,
+    sendContextOnConnect: boolean
 ): unknown {
     return webChat.createStore({}, ({ dispatch }) => next => action => {
         if (
-            action.type === "DIRECT_LINE/CONNECT_FULFILLED" ||
+            (sendContextOnConnect && action.type === "DIRECT_LINE/CONNECT_FULFILLED") ||
             action.type === "WEB_CHAT/SEND_MESSAGE"
         ) {
             const context = getContext();
@@ -566,49 +556,6 @@ function createContextStore(
     });
 }
 
-function startNavigationWatcher(
-    store: unknown,
-    configuration: SidecarConfiguration,
-    initial: LaunchContext
-): void {
-    if (navigationWatcher !== null) {
-        window.clearInterval(navigationWatcher);
-    }
-    let lastSignature = contextSignature(activeContext ?? initial);
-    navigationWatcher = window.setInterval(() => {
-        const next = resolveContext(activeContext ?? initial, configuration);
-        const signature = contextSignature(next);
-        if (signature === lastSignature) {
-            return;
-        }
-        lastSignature = signature;
-        activeContext = next;
-        const dispatch = (store as { dispatch?: (action: WebChatAction) => void }).dispatch;
-        if (typeof dispatch !== "function") {
-            return;
-        }
-        try {
-            dispatch({
-                type: "WEB_CHAT/SEND_EVENT",
-                payload: {
-                    name: "pvaSetContext",
-                    value: {
-                        CurrentAppId: next.appId,
-                        CurrentPageType: next.pageType,
-                        CurrentScreen: getScreenName(next, configuration),
-                        CurrentTable: next.entityName,
-                        CurrentRecordId: next.recordId,
-                        CurrentRecordName: next.recordName,
-                        CurrentUserRoles: serializeUserRoles(next.roles)
-                    }
-                }
-            });
-        } catch {
-            // A dropped context event is recovered by the per-message envelope.
-        }
-    }, 1000);
-}
-
 function resetWebChatHost(): HTMLElement {
     const current = getRequiredElement<HTMLElement>("webchat");
     const replacement = document.createElement("div");
@@ -620,7 +567,8 @@ function resetWebChatHost(): HTMLElement {
 function renderConversation(
     token: string,
     context: LaunchContext,
-    configuration: SidecarConfiguration
+    configuration: SidecarConfiguration,
+    sendContextOnConnect = false
 ): void {
     if (
         !window.WebChat ||
@@ -662,14 +610,12 @@ function renderConversation(
         const currentContext = resolveContext(activeContext ?? context, configuration);
         activeContext = currentContext;
         return currentContext;
-    }, configuration);
+    }, configuration, sendContextOnConnect);
 
     const chat = getRequiredElement<HTMLElement>("chat");
     const webChat = getRequiredElement<HTMLElement>("webchat");
     getRequiredElement<HTMLElement>("status").hidden = true;
     chat.hidden = false;
-
-    startNavigationWatcher(store, configuration, context);
 
     window.WebChat.renderWebChat({
         directLine: connection,
@@ -711,7 +657,8 @@ async function startNewConversation(): Promise<void> {
         renderConversation(
             activeToken,
             resolveContext(activeContext, activeConfiguration),
-            activeConfiguration
+            activeConfiguration,
+            true
         );
     } catch (error) {
         getRequiredElement<HTMLElement>("chat").hidden = true;

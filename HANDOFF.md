@@ -15,7 +15,7 @@ The core capability is **complete and working end to end** in two environments. 
 - **Admin app** (Power Apps Code App, System Administrator only): 5-step wizard — Application → Tables & forms → Agent → Identity → Review/Deploy. Deploy, disable, reconcile, and uninstall all work with **live per-form progress** and a **downloadable JSON report**.
 - **Per-form selection**: tables default off; expand a table to pick individual forms; the **Information** form is selected by default. Deploy binds only selected forms.
 - **Sign-in**: delegated MSAL PKCE completed via a same-origin **localStorage handshake** (COOP-proof); succeeds on the first attempt; loading splash title comes from the configured pane title.
-- **Navigation context**: the launcher writes the current form context to localStorage on every OnLoad; the sidecar watches it and proactively pushes a fresh `pvaSetContext` into the live conversation, plus a trusted per-message envelope.
+- **Navigation context**: the launcher writes the current form context to localStorage on every OnLoad without contacting the agent. The pane sends `pvaSetContext` and a trusted context envelope only when the user submits a prompt or explicitly starts a new conversation.
 - **Deployed** to dev (`carremacodeapps`) and destination (`carrema Sales CS` / `org862d1967`). README repositioned as a reusable product.
 - **Green baseline**: `npm run typecheck`, `npm test` (26), `npm run lint`, `npm run build`; model-driven `node model-driven/build.mjs` + `node --test model-driven/build.test.mjs` (6).
 
