@@ -70,7 +70,11 @@ confirmation and the repository's deployment safeguards.
 9. Select **New conversation**, send a message, then select the prior conversation
    under **Recent conversations**. Confirm its transcript reappears and the next
    prompt continues the prior agent context.
+10. Select **Delete**, cancel once to confirm the conversation remains, then
+    confirm deletion. Verify the conversation disappears, its saved activities
+    are removed, and a clean conversation opens.
 
 Runtime users need the packaged **Agent Sidecar User** security role in addition
-to their normal model-driven-app role. It grants user-level access to the
-user-owned conversation rows and read-only access to sidecar configuration.
+to their normal model-driven-app role. It grants user-level create, read, write,
+delete, append, and append-to access to user-owned conversation rows, user-level
+activity access, and read-only access to sidecar configuration.

@@ -19,19 +19,23 @@ function createWebApi(): {
     retrieveMultipleRecords: ReturnType<typeof vi.fn>;
     createRecord: ReturnType<typeof vi.fn>;
     updateRecord: ReturnType<typeof vi.fn>;
+    deleteRecord: ReturnType<typeof vi.fn>;
 } {
     const retrieveMultipleRecords = vi.fn();
     const createRecord = vi.fn();
     const updateRecord = vi.fn();
+    const deleteRecord = vi.fn();
     return {
         api: {
             retrieveMultipleRecords,
             createRecord,
-            updateRecord
+            updateRecord,
+            deleteRecord
         },
         retrieveMultipleRecords,
         createRecord,
-        updateRecord
+        updateRecord,
+        deleteRecord
     };
 }
 
@@ -168,6 +172,19 @@ describe("SidecarConversationRepository", () => {
 
         expect(createRecord).not.toHaveBeenCalled();
         expect(updateRecord).toHaveBeenCalledTimes(1);
+    });
+
+    it("deletes the conversation parent so Dataverse cascades its activities", async () => {
+        const { api, deleteRecord } = createWebApi();
+        deleteRecord.mockResolvedValue({});
+        const repository = new SidecarConversationRepository(api);
+
+        await repository.deleteConversation(CONVERSATION_RECORD_ID);
+
+        expect(deleteRecord).toHaveBeenCalledWith(
+            "maftagsc_sidecarconversation",
+            CONVERSATION_RECORD_ID
+        );
     });
 });
 

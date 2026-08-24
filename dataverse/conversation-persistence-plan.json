@@ -181,7 +181,7 @@
     }
   ],
   "security": {
-    "accessModel": "Both tables are user-owned. The Agent Sidecar User role supplies user-level create/read/write/append privileges for conversation rows, user-level create/read/append privileges for activity rows, and organization-level read/append-to access for sidecar configuration. Administrative roles may receive organization-level read for support and retention operations.",
+    "accessModel": "Both tables are user-owned. The Agent Sidecar User role supplies user-level create/read/write/delete/append/append-to privileges for conversation rows, user-level create/read/append privileges for activity rows, and organization-level read/append-to access for sidecar configuration. Conversation deletion cascades to its activity rows. Administrative roles may receive organization-level read for support and retention operations.",
     "packagedRole": "Agent Sidecar User",
     "sensitiveDataRules": [
       "Never store access tokens, trusted context envelopes, full channelData, or connector payloads.",

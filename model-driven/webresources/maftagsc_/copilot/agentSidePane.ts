@@ -121,6 +121,7 @@ let activeConversationRepository: SidecarConversationRepository | null = null;
 let activeConversationScope: SidecarConversationScope | null = null;
 let activeConversationReference: SidecarConversationReference | null = null;
 let recentConversations = new Map<string, SidecarConversationReference>();
+let deletedConversationIds = new Set<string>();
 let activeConversationGeneration = 0;
 let resetInProgress = false;
 
@@ -341,6 +342,7 @@ function formatConversationOption(conversation: SidecarConversationReference): s
 
 function renderRecentConversationOptions(selectedId?: string): void {
     const select = getRequiredElement<HTMLSelectElement>("recent-conversations");
+    const deleteButton = getRequiredElement<HTMLButtonElement>("delete-conversation");
     const selected = selectedId ?? activeConversationReference?.id ?? "";
     const conversations = [...recentConversations.values()]
         .sort((left, right) =>
@@ -358,6 +360,9 @@ function renderRecentConversationOptions(selectedId?: string): void {
         ));
     }
     select.disabled = conversations.length === 0 || resetInProgress;
+    deleteButton.disabled = resetInProgress ||
+        !selected ||
+        !recentConversations.has(selected);
 }
 
 function onConversationReferenceChanged(reference: SidecarConversationReference): void {
@@ -371,6 +376,9 @@ function handleSessionReferenceChanged(
     generation: number,
     reference: SidecarConversationReference
 ): void {
+    if (deletedConversationIds.has(reference.id)) {
+        return;
+    }
     recentConversations.set(reference.id, reference);
     if (generation === activeConversationGeneration) {
         onConversationReferenceChanged(reference);
@@ -391,6 +399,7 @@ async function configureConversationPersistence(
     activeConversationScope = null;
     activeConversationReference = null;
     recentConversations = new Map();
+    deletedConversationIds = new Set();
 
     if (!configuration.configurationId) {
         renderRecentConversationOptions();
@@ -937,6 +946,96 @@ async function resumeConversation(conversationRecordId: string): Promise<void> {
     }
 }
 
+async function deleteSelectedConversation(): Promise<void> {
+    if (
+        resetInProgress ||
+        !activeToken ||
+        !activeContext ||
+        !activeConfiguration ||
+        !activeConversationRepository
+    ) {
+        return;
+    }
+    const select = getRequiredElement<HTMLSelectElement>("recent-conversations");
+    const conversation = recentConversations.get(select.value);
+    if (!conversation) {
+        return;
+    }
+    if (!window.confirm(
+        `Delete "${conversation.title}"? This permanently removes the conversation and its saved messages.`
+    )) {
+        return;
+    }
+
+    resetInProgress = true;
+    const newButton = getRequiredElement<HTMLButtonElement>("new-conversation");
+    const deleteButton = getRequiredElement<HTMLButtonElement>("delete-conversation");
+    newButton.disabled = true;
+    deleteButton.disabled = true;
+    select.disabled = true;
+    setHistoryStatus(`Deleting ${conversation.title}…`);
+    let deleted = false;
+    const deletingActiveConversation = activeConversationReference?.id === conversation.id;
+    deletedConversationIds.add(conversation.id);
+    if (deletingActiveConversation) {
+        activeConnection?.end();
+        activeConnection = null;
+        activeConversationGeneration += 1;
+        getRequiredElement<HTMLElement>("webchat").setAttribute("inert", "");
+    }
+
+    try {
+        await activeConversationRepository.deleteConversation(conversation.id);
+        deleted = true;
+        recentConversations.delete(conversation.id);
+
+        if (deletingActiveConversation) {
+            activeConversationReference = null;
+            resetWebChatHost();
+            await renderConversation(
+                activeToken,
+                resolveContext(activeContext, activeConfiguration),
+                activeConfiguration
+            );
+        }
+        setHistoryStatus("Conversation deleted.");
+    } catch (error) {
+        if (deleted) {
+            getRequiredElement<HTMLElement>("chat").hidden = true;
+            getRequiredElement<HTMLElement>("status").hidden = false;
+            showError(error);
+        } else {
+            deletedConversationIds.delete(conversation.id);
+            if (deletingActiveConversation) {
+                try {
+                    resetWebChatHost();
+                    await renderConversation(
+                        activeToken,
+                        resolveContext(activeContext, activeConfiguration),
+                        activeConfiguration,
+                        false,
+                        conversation
+                    );
+                    setHistoryStatus(
+                        "The conversation could not be deleted and was restored.",
+                        true
+                    );
+                } catch (restoreError) {
+                    getRequiredElement<HTMLElement>("chat").hidden = true;
+                    getRequiredElement<HTMLElement>("status").hidden = false;
+                    showError(restoreError);
+                }
+            } else {
+                reportConversationHistoryError(error);
+            }
+        }
+    } finally {
+        resetInProgress = false;
+        newButton.disabled = false;
+        renderRecentConversationOptions(activeConversationReference?.id);
+    }
+}
+
 async function start(interactive: boolean): Promise<void> {
     if (startInProgress) {
         return;
@@ -971,6 +1070,9 @@ function initialize(): void {
     });
     getRequiredElement<HTMLButtonElement>("new-conversation").addEventListener("click", () => {
         void startNewConversation();
+    });
+    getRequiredElement<HTMLButtonElement>("delete-conversation").addEventListener("click", () => {
+        void deleteSelectedConversation();
     });
     getRequiredElement<HTMLSelectElement>("recent-conversations").addEventListener(
         "change",

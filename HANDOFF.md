@@ -16,10 +16,10 @@ The core capability is **complete and working end to end** in two environments. 
 - **Per-form selection**: tables default off; expand a table to pick individual forms; the **Information** form is selected by default. Deploy binds only selected forms.
 - **Sign-in**: delegated MSAL PKCE completed via a same-origin **localStorage handshake** (COOP-proof); succeeds on the first attempt; loading splash title comes from the configured pane title.
 - **Navigation context**: the launcher writes the current form context to localStorage on every OnLoad without contacting the agent. The pane sends `pvaSetContext` and a trusted context envelope only when the user submits a prompt or explicitly starts a new conversation.
-- **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** resumes server context and replays the transcript without sending navigation context.
-- **Security**: the unassigned **Agent Sidecar User** role is packaged in `AgentSidecarCore`; assign it alongside each end user's normal application role.
+- **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** resumes server context and replays the transcript without sending navigation context. **Delete** permanently removes a selected conversation and cascades to its saved activities after confirmation.
+- **Security**: the unassigned **Agent Sidecar User** role is packaged in `AgentSidecarCore`; assign it alongside each end user's normal application role. It includes user-level delete on conversation parents so users can remove only their own history.
 - **Deployed** to dev (`carremacodeapps`) and destination (`carrema Sales CS` / `org862d1967`). README repositioned as a reusable product.
-- **Green baseline**: `npm run typecheck`, `npm test` (38), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (8).
+- **Green baseline**: `npm run typecheck`, `npm test` (39), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (8).
 
 ## Environments and identity
 
@@ -56,7 +56,7 @@ The core capability is **complete and working end to end** in two environments. 
 - **Runtime auth is delegated MSAL PKCE** (scope `CopilotStudio.Copilots.Invoke`) + `CopilotStudioWebChat`. The runtime passes the configured Agents SDK connection string as `directConnectUrl`, preserving the Copilot Studio-selected standard or GitHub Copilot harness endpoint. It does **not** call the token-broker Custom API (`maftagsc_GetDirectLineToken`); that plugin/step is disabled and off the critical path.
 - **Sign-in completion**: `authRedirect.ts` is a self-contained MSAL redirect client that reports via same-origin `localStorage`; `agentSidePane.ts` opens it as a popup and polls. **Do not** reintroduce `acquireTokenPopup` or the MSAL redirect-bridge (`broadcastResponseToMainFrame`) — Dynamics' COOP header breaks it.
 - **Context sync**: `agentSidePaneLauncher.ts` writes `maftagsc.sidecar.context.<paneId>` on each OnLoad; `agentSidePane.ts` reads it only for prompt submission and explicit new-conversation context. Navigation never sends an agent activity.
-- **Conversation resume**: `sidecarConversationRepository.ts` stores only bounded display text. The Agents SDK resumes with `createConnection({ conversationId })`; Web Chat history is replayed separately with a private marker that prevents duplicate persistence.
+- **Conversation resume and deletion**: `sidecarConversationRepository.ts` stores only bounded display text. The Agents SDK resumes with `createConnection({ conversationId })`; Web Chat history is replayed separately with a private marker that prevents duplicate persistence. Deleting the active parent row cascades its activities and opens a clean SDK session.
 - **Per-form model**: `TargetTable.forms[] {formId, name, enabled}`; deploy binds only `enabled` forms; `src/lib/target-forms.ts` picks the Information default.
 - Three-layer: components render, hooks orchestrate, providers/services behind adapters; `src/generated/**` is read-only. `HashRouter`. Vite port 3001 / PAC host port 3000. `base: './'` for production build.
 

@@ -120,6 +120,34 @@
             outline-offset: 2px;
         }
 
+        #delete-conversation {
+            min-height: 30px;
+            padding: 4px 10px;
+            border: 1px solid #d1d1d1;
+            border-radius: 4px;
+            color: #b10e1c;
+            background: #ffffff;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        #delete-conversation:hover {
+            border-color: #b10e1c;
+            background: #fdf3f4;
+        }
+
+        #delete-conversation:disabled {
+            color: #a0a0a0;
+            cursor: not-allowed;
+        }
+
+        #delete-conversation:focus-visible {
+            outline: 2px solid #b10e1c;
+            outline-offset: 2px;
+        }
+
         #webchat {
             min-width: 0;
             min-height: 0;
@@ -213,6 +241,12 @@
                 type="button"
                 title="Clear this chat and start a new conversation"
             >New conversation</button>
+            <button
+                id="delete-conversation"
+                type="button"
+                title="Permanently delete the selected conversation"
+                disabled
+            >Delete</button>
         </div>
         <div id="webchat"></div>
     </div>

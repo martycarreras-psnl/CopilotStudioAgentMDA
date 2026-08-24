@@ -150,6 +150,8 @@ The primary record name is accepted only when the form's table and normalized re
 
 Selecting **New conversation** closes the current Agents SDK connection, clears the visible transcript, resolves the page open at that moment, and creates a fresh conversation without forcing another sign-in. The previous conversation remains available under **Recent conversations**. Selecting a recent conversation recreates the connection with its saved Agents SDK `conversationId` and replays its stored display activities; it does not send page context until the user submits another prompt.
 
+Selecting a saved conversation also enables **Delete**. After confirmation, the sidecar permanently deletes that user-owned conversation and its saved activities. Deleting the active conversation immediately opens a clean session; deletion cannot be undone.
+
 ## Authentication and authorization
 
 The side pane preserves the user's identity end to end:

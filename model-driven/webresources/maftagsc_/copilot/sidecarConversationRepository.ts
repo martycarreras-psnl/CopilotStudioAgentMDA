@@ -33,6 +33,10 @@ export interface SidecarDataverseWebApi {
         id: string,
         data: Record<string, unknown>
     ): Promise<unknown>;
+    deleteRecord(
+        entityLogicalName: string,
+        id: string
+    ): Promise<unknown>;
 }
 
 export interface SidecarConversationScope {
@@ -233,6 +237,14 @@ export class SidecarConversationRepository {
             5000
         );
         return result.entities.map(toActivity);
+    }
+
+    async deleteConversation(conversationRecordId: string): Promise<void> {
+        const id = requireGuid(
+            conversationRecordId,
+            "sidecar_conversation_record_id_invalid"
+        );
+        await this.webApi.deleteRecord(CONVERSATION_TABLE, id);
     }
 
     async appendActivity(
