@@ -677,6 +677,7 @@ function renderConversation(
         store,
         styleOptions: {
             accent: "#0f6cbd",
+            backgroundColor: "#fafafa",
             primaryFont: "\"Segoe UI\", \"Segoe UI Web (West European)\", -apple-system, system-ui, Roboto, \"Helvetica Neue\", sans-serif",
             bubbleBackground: "#f5f5f5",
             bubbleFromUserBackground: "#deecf9",
