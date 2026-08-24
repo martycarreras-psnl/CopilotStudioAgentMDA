@@ -34,7 +34,12 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     assert.match(html, /WEB_CHAT\/SEND_MESSAGE/);
     assert.match(html, /entitylist/);
     assert.match(html, /New conversation/);
-    assert.match(html, /The current chat history will be cleared/);
+    assert.match(html, /Recent conversations/);
+    assert.match(html, /conversationId:/);
+    assert.match(html, /maftagsc_sidecarconversation/);
+    assert.match(html, /DIRECT_LINE\/INCOMING_ACTIVITY/);
+    assert.match(html, /maftagscSidecarReplay/);
+    assert.match(html, /The current chat will remain available under Recent conversations/);
     assert.match(html, /cacheLocation:"localStorage"/);
     assert.doesNotMatch(html, /hrAgentContext/);
     assert.equal((html.match(/<!doctype html>/gi) ?? []).length, 1);
@@ -99,6 +104,8 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /action\.type === "WEB_CHAT\/SEND_MESSAGE"/);
     assert.match(source, /activeConfiguration,\s+true/);
     assert.match(source, /await sidecarConfigurationRepository\.getByAppId\(appId\)/);
+    assert.match(source, /activity\.sequence - replaySequenceOffset/);
+    assert.match(source, /generation === activeConversationGeneration/);
 });
 
 test("signed-in user security roles flow into the agent context", async () => {

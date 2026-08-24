@@ -23,6 +23,7 @@ function createConfiguration(
     overrides: Partial<SidecarConfiguration> = {}
 ): SidecarConfiguration {
     return {
+        configurationId: CONFIGURATION_ID,
         appId: APP_ID,
         enabled: true,
         paneId: "maftagsc_hr_management_app_guide",
@@ -125,6 +126,7 @@ describe("sidecar configuration resolution", () => {
         );
 
         await expect(repository.getByAppId(APP_ID)).resolves.toMatchObject({
+            configurationId: CONFIGURATION_ID,
             agentSchemaName: "cr88d_insightsandactions_AChDbK",
             agentConnectionString: GITHUB_CONNECTION_STRING
         });

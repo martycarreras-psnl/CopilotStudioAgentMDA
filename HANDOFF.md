@@ -16,8 +16,10 @@ The core capability is **complete and working end to end** in two environments. 
 - **Per-form selection**: tables default off; expand a table to pick individual forms; the **Information** form is selected by default. Deploy binds only selected forms.
 - **Sign-in**: delegated MSAL PKCE completed via a same-origin **localStorage handshake** (COOP-proof); succeeds on the first attempt; loading splash title comes from the configured pane title.
 - **Navigation context**: the launcher writes the current form context to localStorage on every OnLoad without contacting the agent. The pane sends `pvaSetContext` and a trusted context envelope only when the user submits a prompt or explicitly starts a new conversation.
+- **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** resumes server context and replays the transcript without sending navigation context.
+- **Security**: the unassigned **Agent Sidecar User** role is packaged in `AgentSidecarCore`; assign it alongside each end user's normal application role.
 - **Deployed** to dev (`carremacodeapps`) and destination (`carrema Sales CS` / `org862d1967`). README repositioned as a reusable product.
-- **Green baseline**: `npm run typecheck`, `npm test` (26), `npm run lint`, `npm run build`; model-driven `node model-driven/build.mjs` + `node --test model-driven/build.test.mjs` (6).
+- **Green baseline**: `npm run typecheck`, `npm test` (37), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (7).
 
 ## Environments and identity
 
@@ -33,7 +35,7 @@ The core capability is **complete and working end to end** in two environments. 
 - Solutions: **`AgentSidecarCore`** (reusable — the deliverable), `HRAgentSidecar` (HR reference).
 - Code App id `71d3fa20-9990-4622-9775-11b56f2ed893` (canvasapp `maftagsc_agentsidecar_4b928`).
 - Both SPA app regs are single-tenant SPA with delegated `CopilotStudio.Copilots.Invoke` + admin consent; redirect URI is `<org>/WebResources/maftagsc_/copilot/authRedirect.html`.
-- GitHub: `https://github.com/martycarreras-psnl/CustomAgentMDA` (branch `main`, latest `f90ada3`).
+- GitHub: `https://github.com/martycarreras-psnl/CopilotStudioAgentMDA` (branch `main`).
 
 ## Deployment pipeline
 
@@ -44,15 +46,17 @@ The core capability is **complete and working end to end** in two environments. 
 4. Commit the refreshed zip and push.
 
 **Web-resource changes** (side-pane runtime in `model-driven/`):
-1. `node model-driven/build.mjs` (rebuilds `solution/WebResources/maftagsc_/copilot/*`)
-2. PATCH each changed web resource's `content` (base64) via the Web API in dev, then `PublishXml`. Use `scripts/auth.py` `get_token(scope=<URL>/.default)`; URL-encode `$filter` with `urllib.parse.quote(...)`.
-3. Export from dev and import to destination as above.
+1. `npm run build:model-driven` (rebuilds `solution/WebResources/maftagsc_/copilot/*`).
+2. Commit and push the complete change to GitHub.
+3. PATCH each changed web resource's `content` through the authenticated Dataverse Web API, then call `PublishXml`.
+4. Export `AgentSidecarCore` and refresh `solution-core/AgentSidecarCore.zip`.
 
 ## Architecture facts to preserve
 
 - **Runtime auth is delegated MSAL PKCE** (scope `CopilotStudio.Copilots.Invoke`) + `CopilotStudioWebChat`. The runtime passes the configured Agents SDK connection string as `directConnectUrl`, preserving the Copilot Studio-selected standard or GitHub Copilot harness endpoint. It does **not** call the token-broker Custom API (`maftagsc_GetDirectLineToken`); that plugin/step is disabled and off the critical path.
 - **Sign-in completion**: `authRedirect.ts` is a self-contained MSAL redirect client that reports via same-origin `localStorage`; `agentSidePane.ts` opens it as a popup and polls. **Do not** reintroduce `acquireTokenPopup` or the MSAL redirect-bridge (`broadcastResponseToMainFrame`) — Dynamics' COOP header breaks it.
-- **Context sync**: `agentSidePaneLauncher.ts` writes `maftagsc.sidecar.context.<paneId>` on each OnLoad; `agentSidePane.ts` `readSharedContext` + a 1s navigation watcher pushes `pvaSetContext`.
+- **Context sync**: `agentSidePaneLauncher.ts` writes `maftagsc.sidecar.context.<paneId>` on each OnLoad; `agentSidePane.ts` reads it only for prompt submission and explicit new-conversation context. Navigation never sends an agent activity.
+- **Conversation resume**: `sidecarConversationRepository.ts` stores only bounded display text. The Agents SDK resumes with `createConnection({ conversationId })`; Web Chat history is replayed separately with a private marker that prevents duplicate persistence.
 - **Per-form model**: `TargetTable.forms[] {formId, name, enabled}`; deploy binds only `enabled` forms; `src/lib/target-forms.ts` picks the Information default.
 - Three-layer: components render, hooks orchestrate, providers/services behind adapters; `src/generated/**` is read-only. `HashRouter`. Vite port 3001 / PAC host port 3000. `base: './'` for production build.
 
@@ -64,6 +68,7 @@ The core capability is **complete and working end to end** in two environments. 
 - `src/hooks/useOperationReport.ts`, `src/components/OperationProgress/OperationProgress.tsx` — progress + downloadable report.
 - `src/lib/target-forms.ts` — Information-form default helper.
 - `model-driven/webresources/maftagsc_/copilot/agentSidePane.ts` (sidecar), `agentSidePaneLauncher.ts` (launcher), `authRedirect.ts` (sign-in), `agentSidePane.template.html`.
+- `model-driven/webresources/maftagsc_/copilot/sidecarConversationRepository.ts` — user-scoped conversation/history persistence.
 - `model-driven/build.mjs`, `model-driven/build.test.mjs`.
 - `docs/setup-guide/AgentSidecarSetupGuide.html` — interactive setup guide + values worksheet (includes the Agents SDK connection string).
 - `README.md` — product framing. `AGENTS.md` — repo constraints. `CONTEXT.md` — glossary.

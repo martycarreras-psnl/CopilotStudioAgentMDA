@@ -6,6 +6,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 
 ## What's new
 
+- **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
 - **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context (and are also exposed as a `CurrentUserRoles` variable for topic branching), so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
 - **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
 - **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
@@ -13,6 +14,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 ## What you get
 
 - A **persistent side pane** on the forms you select, keyed per app, that stays open and keeps its conversation as users navigate between records.
+- **Recent conversation resume** backed by user-owned Dataverse rows, including local transcript replay and Agents SDK server-context continuation.
 - **Live context**: the current table, record, and screen are sent to your agent before every message and updated automatically as the user moves around the app.
 - **Delegated authentication** (Microsoft Entra, authorization code with PKCE): the agent answers as the signed-in user, so knowledge stays subject to that user's existing permissions. No secrets live in the browser.
 - An **Agent Sidecar administration app** — a Power Apps Code App, restricted to System Administrators — that discovers your apps, tables, and forms and deploys, validates, reconciles, or removes the sidecar with automatic rollback.
@@ -71,6 +73,7 @@ flowchart LR
 		Pane --> Host[Bundled HTML host<br/>agentSidePane.html]
 		MDA -->|live page and record context| Host
 		MDA --> Data[(Your tables and<br/>platform security)]
+		Host --> History[(User-owned conversation<br/>references and display activities)]
 	end
 
 	Host -->|authorization code + PKCE| Entra[Microsoft Entra ID]
@@ -103,6 +106,7 @@ sequenceDiagram
 	C->>K: Retrieve only knowledge the user may access
 	K-->>C: Authorized grounding results
 	C-->>A: Stream response activities
+	P->>History: Save conversation ID and display-safe activities
 	A-->>P: Render through Web Chat
 	P-->>U: Contextual answer for the current screen
 ```
@@ -115,7 +119,8 @@ sequenceDiagram
 | **Form OnLoad handler** | The administration app registers a handler on each form you select, so the pane loads with that form. |
 | **JavaScript launcher** | Validates the current table and record, creates or reuses one stable pane per app, and writes the live record context so the open pane can follow navigation. |
 | **Persistent side pane** | Keyed per app, it starts collapsed and preserves the active conversation as the user navigates between records. |
-| **HTML host and client** | Hosts Web Chat, signs the user in, creates the Agents SDK connection, keeps context current, and manages conversation reset. |
+| **HTML host and client** | Hosts Web Chat, signs the user in, creates or resumes the Agents SDK connection, keeps context current, persists display-safe activities, and replays selected transcripts. |
+| **Conversation tables** | User-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` rows provide recent-conversation discovery and transcript replay without storing tokens, trusted context envelopes, or connector payloads. |
 | **Microsoft Entra app registration** | Authenticates the signed-in user with authorization code + PKCE and requests only `https://api.powerplatform.com/CopilotStudio.Copilots.Invoke`. No browser client secret exists. |
 | **Microsoft 365 Agents SDK** | `CopilotStudioClient` uses the Web app channel connection string as its direct endpoint with the delegated user token. |
 | **Your Copilot Studio agent** | Interprets the question and uses the supplied screen context to select relevant guidance from its knowledge. |
@@ -143,7 +148,7 @@ Two mechanisms deliver that context to the agent:
 
 The primary record name is accepted only when the form's table and normalized record ID match the current page context, so a record name from the previously viewed screen never leaks into the next question.
 
-Selecting **New conversation** closes the current Agents SDK connection, clears the local transcript, resolves the page open at that moment, and creates a fresh conversation without forcing another sign-in.
+Selecting **New conversation** closes the current Agents SDK connection, clears the visible transcript, resolves the page open at that moment, and creates a fresh conversation without forcing another sign-in. The previous conversation remains available under **Recent conversations**. Selecting a recent conversation recreates the connection with its saved Agents SDK `conversationId` and replays its stored display activities; it does not send page context until the user submits another prompt.
 
 ## Authentication and authorization
 
@@ -156,6 +161,8 @@ The side pane preserves the user's identity end to end:
 5. Any live Dataverse reads remain subject to table, row, and field security.
 
 Access tokens are handled by MSAL and are not written to URLs, logs, source files, or solution configuration. Application ID, tenant ID, environment ID, and agent schema name are identifiers, not secrets.
+
+Conversation history follows Dataverse security. Assign the packaged **Agent Sidecar User** security role alongside each end user's normal application role. Conversation and activity tables are user-owned, and the runtime explicitly filters recent conversations to the signed-in owner even when the caller has broader administrative access. Only bounded, user-visible message text is stored; access tokens, trusted context envelopes, full `channelData`, and connector payloads are never persisted.
 
 ### Microsoft Entra app registration
 
@@ -221,6 +228,7 @@ Using the sidecar needs nothing beyond the setup steps above. Contributors who w
 ## Design principles
 
 - One stable pane per app, so navigation never creates duplicate conversations.
+- Persist only display-safe conversation history in user-owned Dataverse rows and resume only conversation IDs captured from real SDK connections.
 - Capture context locally on every navigation and deliver the latest value only with a user prompt or explicit new conversation.
 - Treat record IDs as pointers, never as authorization or knowledge content.
 - Preserve delegated identity end to end; the agent answers as the signed-in user and stays within their permissions.

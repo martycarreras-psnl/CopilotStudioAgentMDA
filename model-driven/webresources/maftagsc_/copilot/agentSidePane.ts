@@ -18,12 +18,22 @@ import {
     type SidecarConfiguration
 } from "./sidecarConfiguration";
 import {
+    createHostConversationRepository,
+    SidecarConversationSession,
+    type SidecarConversationActivity,
+    type SidecarConversationActivityDraft,
+    type SidecarConversationReference,
+    type SidecarConversationRepository,
+    type SidecarConversationScope
+} from "./sidecarConversationRepository";
+import {
     formatUserRolesLine,
     normalizeUserRoles,
     serializeUserRoles
 } from "./sidecarUserRoles";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
+const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
 const AUTH_REQUEST_KEY = "maftagsc.sidecar.authRequest";
 const AUTH_RESULT_PREFIX = "maftagsc.sidecar.authResult.";
 
@@ -70,8 +80,12 @@ interface WebChatApi {
     createStore(
         initialState: Record<string, unknown>,
         middleware: (api: WebChatStoreApi) => (next: WebChatNext) => (action: WebChatAction) => unknown
-    ): unknown;
+    ): WebChatStore;
     renderWebChat(options: Record<string, unknown>, element: HTMLElement): void;
+}
+
+interface WebChatStore {
+    dispatch(action: WebChatAction): void;
 }
 
 interface WebChatAction {
@@ -103,6 +117,11 @@ let activeConnection: CopilotStudioWebChatConnection | null = null;
 let activeToken: string | null = null;
 let activeContext: LaunchContext | null = null;
 let activeConfiguration: SidecarConfiguration | null = null;
+let activeConversationRepository: SidecarConversationRepository | null = null;
+let activeConversationScope: SidecarConversationScope | null = null;
+let activeConversationReference: SidecarConversationReference | null = null;
+let recentConversations = new Map<string, SidecarConversationReference>();
+let activeConversationGeneration = 0;
 let resetInProgress = false;
 
 function getRequiredElement<T extends HTMLElement>(id: string): T {
@@ -301,6 +320,107 @@ function showError(error: unknown): void {
     const retry = getRequiredElement<HTMLButtonElement>("sign-in");
     retry.textContent = "Try again";
     retry.hidden = false;
+}
+
+function setHistoryStatus(message: string, isError = false): void {
+    const status = getRequiredElement<HTMLElement>("conversation-history-status");
+    status.textContent = message;
+    status.dataset.error = isError ? "true" : "false";
+}
+
+function formatConversationOption(conversation: SidecarConversationReference): string {
+    const timestamp = new Date(conversation.lastActivityOn);
+    const dateLabel = Number.isNaN(timestamp.getTime())
+        ? ""
+        : timestamp.toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric"
+        });
+    return `${conversation.title}${dateLabel ? ` · ${dateLabel}` : ""}`.slice(0, 220);
+}
+
+function renderRecentConversationOptions(selectedId?: string): void {
+    const select = getRequiredElement<HTMLSelectElement>("recent-conversations");
+    const selected = selectedId ?? activeConversationReference?.id ?? "";
+    const conversations = [...recentConversations.values()]
+        .sort((left, right) =>
+            new Date(right.lastActivityOn).getTime() -
+            new Date(left.lastActivityOn).getTime()
+        )
+        .slice(0, 20);
+    select.replaceChildren(new Option("Recent conversations", ""));
+    for (const conversation of conversations) {
+        select.add(new Option(
+            formatConversationOption(conversation),
+            conversation.id,
+            false,
+            conversation.id === selected
+        ));
+    }
+    select.disabled = conversations.length === 0 || resetInProgress;
+}
+
+function onConversationReferenceChanged(reference: SidecarConversationReference): void {
+    activeConversationReference = reference;
+    recentConversations.set(reference.id, reference);
+    renderRecentConversationOptions(reference.id);
+    setHistoryStatus("Conversation saved.");
+}
+
+function handleSessionReferenceChanged(
+    generation: number,
+    reference: SidecarConversationReference
+): void {
+    recentConversations.set(reference.id, reference);
+    if (generation === activeConversationGeneration) {
+        onConversationReferenceChanged(reference);
+        return;
+    }
+    renderRecentConversationOptions(activeConversationReference?.id);
+}
+
+function reportConversationHistoryError(error: unknown): void {
+    const code = getSafeErrorCode(error);
+    setHistoryStatus(`History unavailable (${code}).`, true);
+}
+
+async function configureConversationPersistence(
+    configuration: SidecarConfiguration
+): Promise<void> {
+    activeConversationRepository = null;
+    activeConversationScope = null;
+    activeConversationReference = null;
+    recentConversations = new Map();
+
+    if (!configuration.configurationId) {
+        renderRecentConversationOptions();
+        setHistoryStatus("History is unavailable for fallback configuration.", true);
+        return;
+    }
+
+    try {
+        const { repository, ownerId } = createHostConversationRepository();
+        activeConversationRepository = repository;
+        activeConversationScope = {
+            ownerId,
+            configurationId: configuration.configurationId,
+            appId: configuration.appId,
+            agentSchemaName: configuration.agentSchemaName
+        };
+        const conversations = await repository.listRecent(activeConversationScope);
+        recentConversations = new Map(
+            conversations.map(conversation => [conversation.id, conversation])
+        );
+        renderRecentConversationOptions();
+        setHistoryStatus(
+            conversations.length > 0
+                ? `${conversations.length} recent conversation${conversations.length === 1 ? "" : "s"}.`
+                : "Conversation history is ready."
+        );
+    } catch (error) {
+        renderRecentConversationOptions();
+        reportConversationHistoryError(error);
+    }
 }
 
 function getMsalClient(configuration: SidecarConfiguration): PublicClientApplication {
@@ -508,8 +628,10 @@ function createContextStore(
     webChat: WebChatApi,
     getContext: () => LaunchContext,
     configuration: SidecarConfiguration,
-    sendContextOnConnect: boolean
-): unknown {
+    sendContextOnConnect: boolean,
+    persistence: SidecarConversationSession | null,
+    getConversationId: () => string | undefined
+): WebChatStore {
     return webChat.createStore({}, ({ dispatch }) => next => action => {
         if (
             (sendContextOnConnect && action.type === "DIRECT_LINE/CONNECT_FULFILLED") ||
@@ -535,12 +657,39 @@ function createContextStore(
 
         const activity = action.payload?.activity;
         const originalText = activity?.channelData?.[ORIGINAL_TEXT_KEY];
+        const isReplay = activity?.channelData?.[REPLAY_ACTIVITY_KEY] === true;
+        if (
+            action.type === "DIRECT_LINE/INCOMING_ACTIVITY" &&
+            activity?.type === "message" &&
+            !isReplay
+        ) {
+            const displayText = typeof originalText === "string"
+                ? originalText.trim()
+                : activity.text?.trim();
+            if (displayText) {
+                const draft: SidecarConversationActivityDraft = {
+                    activityId: String(activity.id ?? crypto.randomUUID()),
+                    role: typeof originalText === "string" ||
+                        activity.from?.role === "user"
+                        ? "user"
+                        : "assistant",
+                    activityType: "message",
+                    text: displayText,
+                    timestamp: String(activity.timestamp ?? new Date().toISOString())
+                };
+                persistence?.observe(draft, getConversationId());
+            }
+        }
+        if (action.type === "DIRECT_LINE/INCOMING_ACTIVITY" && !isReplay) {
+            persistence?.attachConversationId(getConversationId());
+        }
+
         if (
             action.type === "DIRECT_LINE/INCOMING_ACTIVITY" &&
             activity?.type === "message" &&
             typeof originalText === "string"
         ) {
-            return next({
+            action = {
                 ...action,
                 payload: {
                     ...action.payload,
@@ -549,11 +698,45 @@ function createContextStore(
                         text: originalText
                     }
                 }
-            });
+            };
         }
 
         return next(action);
     });
+}
+
+function replayConversationActivities(
+    store: WebChatStore,
+    conversation: SidecarConversationReference,
+    activities: readonly SidecarConversationActivity[]
+): void {
+    const replaySequenceOffset = activities.reduce(
+        (highest, activity) => Math.max(highest, activity.sequence),
+        0
+    ) + 1;
+    for (const activity of activities) {
+        store.dispatch({
+            type: "DIRECT_LINE/INCOMING_ACTIVITY",
+            payload: {
+                activity: {
+                    id: activity.activityId,
+                    type: "message",
+                    text: activity.text,
+                    timestamp: activity.timestamp,
+                    channelId: "copilotstudio",
+                    conversation: { id: conversation.conversationId },
+                    from: activity.role === "user"
+                        ? { id: "user", name: "You", role: "user" }
+                        : { id: "agent", name: "Agent", role: "bot" },
+                    channelData: {
+                        [REPLAY_ACTIVITY_KEY]: true,
+                        "webchat:sequence-id":
+                            activity.sequence - replaySequenceOffset
+                    }
+                }
+            }
+        });
+    }
 }
 
 function resetWebChatHost(): HTMLElement {
@@ -564,12 +747,13 @@ function resetWebChatHost(): HTMLElement {
     return replacement;
 }
 
-function renderConversation(
+async function renderConversation(
     token: string,
     context: LaunchContext,
     configuration: SidecarConfiguration,
-    sendContextOnConnect = false
-): void {
+    sendContextOnConnect = false,
+    resumeConversation?: SidecarConversationReference
+): Promise<void> {
     if (
         !window.WebChat ||
         typeof window.WebChat.createStore !== "function" ||
@@ -578,13 +762,39 @@ function renderConversation(
         throw new Error("The chat client couldn't be loaded.");
     }
 
+    const generation = ++activeConversationGeneration;
     const settings = new ConnectionSettings({
         directConnectUrl: configuration.agentConnectionString
     });
     const client = new CopilotStudioClient(settings, token);
     const connection = CopilotStudioWebChat.createConnection(client, {
-        showTyping: true
+        showTyping: true,
+        conversationId: resumeConversation?.conversationId
     });
+    let persistedActivities: SidecarConversationActivity[] = [];
+    const persistence = activeConversationRepository && activeConversationScope
+        ? new SidecarConversationSession(
+            activeConversationRepository,
+            activeConversationScope,
+            {
+                tableName: context.entityName,
+                recordId: context.recordId,
+                recordName: context.recordName
+            },
+            reference => handleSessionReferenceChanged(generation, reference),
+            error => {
+                if (generation === activeConversationGeneration) {
+                    reportConversationHistoryError(error);
+                }
+            }
+        )
+        : null;
+    if (resumeConversation && persistence && activeConversationRepository) {
+        persistedActivities = await activeConversationRepository.listActivities(
+            resumeConversation.id
+        );
+        persistence.restore(resumeConversation, persistedActivities);
+    }
     const originalPostActivity = connection.postActivity.bind(connection);
     connection.postActivity = (activity: Activity) => {
         const originalText = activity.type === "message"
@@ -610,7 +820,7 @@ function renderConversation(
         const currentContext = resolveContext(activeContext ?? context, configuration);
         activeContext = currentContext;
         return currentContext;
-    }, configuration, sendContextOnConnect);
+    }, configuration, sendContextOnConnect, persistence, () => connection.conversationId);
 
     const chat = getRequiredElement<HTMLElement>("chat");
     const webChat = getRequiredElement<HTMLElement>("webchat");
@@ -629,11 +839,22 @@ function renderConversation(
             hideUploadButton: true
         }
     }, webChat);
+    if (resumeConversation) {
+        replayConversationActivities(store, resumeConversation, persistedActivities);
+    }
 
     activeConnection = connection;
     activeToken = token;
     activeContext = context;
     activeConfiguration = configuration;
+    activeConversationReference = resumeConversation ?? null;
+    if (resumeConversation) {
+        renderRecentConversationOptions(resumeConversation.id);
+        setHistoryStatus(`Resumed ${resumeConversation.title}.`);
+    } else {
+        renderRecentConversationOptions();
+    }
+    persistence?.attachConversationId(connection.conversationId);
     chat.focus();
 }
 
@@ -641,7 +862,9 @@ async function startNewConversation(): Promise<void> {
     if (resetInProgress || !activeToken || !activeContext || !activeConfiguration) {
         return;
     }
-    if (!window.confirm("Start a new conversation? The current chat history will be cleared.")) {
+    if (!window.confirm(
+        "Start a new conversation? The current chat will remain available under Recent conversations."
+    )) {
         return;
     }
 
@@ -654,7 +877,7 @@ async function startNewConversation(): Promise<void> {
         activeConnection?.end();
         activeConnection = null;
         resetWebChatHost();
-        renderConversation(
+        await renderConversation(
             activeToken,
             resolveContext(activeContext, activeConfiguration),
             activeConfiguration,
@@ -668,6 +891,49 @@ async function startNewConversation(): Promise<void> {
         button.disabled = false;
         button.textContent = "New conversation";
         resetInProgress = false;
+    }
+}
+
+async function resumeConversation(conversationRecordId: string): Promise<void> {
+    if (
+        resetInProgress ||
+        !activeToken ||
+        !activeContext ||
+        !activeConfiguration ||
+        !conversationRecordId
+    ) {
+        return;
+    }
+    const conversation = recentConversations.get(conversationRecordId);
+    if (!conversation || conversation.id === activeConversationReference?.id) {
+        return;
+    }
+
+    resetInProgress = true;
+    const button = getRequiredElement<HTMLButtonElement>("new-conversation");
+    const select = getRequiredElement<HTMLSelectElement>("recent-conversations");
+    button.disabled = true;
+    select.disabled = true;
+    setHistoryStatus(`Resuming ${conversation.title}…`);
+
+    try {
+        activeConnection?.end();
+        activeConnection = null;
+        resetWebChatHost();
+        await renderConversation(
+            activeToken,
+            resolveContext(activeContext, activeConfiguration),
+            activeConfiguration,
+            false,
+            conversation
+        );
+    } catch (error) {
+        reportConversationHistoryError(error);
+        renderRecentConversationOptions(activeConversationReference?.id);
+    } finally {
+        button.disabled = false;
+        resetInProgress = false;
+        renderRecentConversationOptions(activeConversationReference?.id);
     }
 }
 
@@ -689,7 +955,8 @@ async function start(interactive: boolean): Promise<void> {
             showSignIn();
             return;
         }
-        renderConversation(token, context, configuration);
+        await configureConversationPersistence(configuration);
+        await renderConversation(token, context, configuration);
     } catch (error) {
         // Never expose token, account, response, or HR context details in the UI or browser logs.
         showError(error);
@@ -705,6 +972,13 @@ function initialize(): void {
     getRequiredElement<HTMLButtonElement>("new-conversation").addEventListener("click", () => {
         void startNewConversation();
     });
+    getRequiredElement<HTMLSelectElement>("recent-conversations").addEventListener(
+        "change",
+        event => {
+            const select = event.currentTarget as HTMLSelectElement;
+            void resumeConversation(select.value);
+        }
+    );
     void start(false);
 }
 

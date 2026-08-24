@@ -71,6 +71,7 @@ implements SidecarConfigurationRepository {
         }
 
         return resolveSidecarConfiguration([{
+            configurationId,
             appId: normalizedAppId,
             enabled: true,
             paneId: `maftagsc_sidecar_${normalizedAppId.replace(/-/g, "")}`,

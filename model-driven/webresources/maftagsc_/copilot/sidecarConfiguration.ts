@@ -6,6 +6,7 @@ export interface SidecarEntityBinding {
 }
 
 export interface SidecarConfiguration {
+    configurationId: string | null;
     appId: string;
     enabled: boolean;
     paneId: string;
@@ -92,6 +93,8 @@ export function assertSidecarConfiguration(configuration: SidecarConfiguration):
     );
 
     if (
+        (configuration.configurationId !== null &&
+            !normalizeGuid(configuration.configurationId)) ||
         identifiers.some(identifier => !normalizeGuid(identifier)) ||
         textValues.some(value => typeof value !== "string" || !value.trim()) ||
         !Number.isInteger(configuration.paneWidth) ||

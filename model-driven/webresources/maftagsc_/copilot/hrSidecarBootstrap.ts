@@ -23,6 +23,7 @@ const HR_ENTITY_BINDINGS = Object.freeze({
 });
 
 const HR_SIDECAR_CONFIGURATION: SidecarConfiguration = Object.freeze({
+    configurationId: null,
     appId: "62e8fdf6-e77b-f111-ab0e-000d3a34048c",
     enabled: true,
     paneId: "maftagsc_hr_management_app_guide",

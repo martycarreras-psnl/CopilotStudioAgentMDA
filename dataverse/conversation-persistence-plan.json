@@ -1,0 +1,192 @@
+{
+  "solution": {
+    "uniqueName": "AgentSidecarCore",
+    "displayName": "Agent Sidecar Core",
+    "publisherUniqueName": "agentsidecar",
+    "publisherPrefix": "maftagsc",
+    "targetEnvironment": "https://org862d1967.crm.dynamics.com"
+  },
+  "decision": {
+    "oobAlternativesConsidered": [
+      "conversationtranscript",
+      "msdyn_copilotinteractions"
+    ],
+    "overrideRationale": "The out-of-box tables are administrative analytics and transcript stores. The Agents SDK cannot list conversations or retrieve prior activities from them for Web Chat, and their retention and access controls are environment-admin concerns. User-owned sidecar tables are required for secure recent-conversation discovery, server-side conversation resumption, and deterministic activity replay.",
+    "overrideApprovedBy": "Marty Carreras",
+    "overrideApprovedAt": "2026-08-24T16:37:11-04:00"
+  },
+  "tables": [
+    {
+      "schemaName": "maftagsc_sidecarconversation",
+      "displayName": "Sidecar Conversation",
+      "displayCollectionName": "Sidecar Conversations",
+      "logicalSingularName": "maftagsc_sidecarconversation",
+      "entitySetName": "maftagsc_sidecarconversations",
+      "ownershipType": "UserOwned",
+      "primaryName": {
+        "schemaName": "maftagsc_name",
+        "displayName": "Conversation Title",
+        "maxLength": 200
+      },
+      "columns": [
+        {
+          "schemaName": "maftagsc_conversationid",
+          "displayName": "Copilot Conversation ID",
+          "type": "String",
+          "maxLength": 100,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_appid",
+          "displayName": "Model-driven App ID",
+          "type": "String",
+          "maxLength": 36,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_agentschemaname",
+          "displayName": "Agent Schema Name",
+          "type": "String",
+          "maxLength": 256,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_originatingtable",
+          "displayName": "Originating Table",
+          "type": "String",
+          "maxLength": 128,
+          "requiredLevel": "None"
+        },
+        {
+          "schemaName": "maftagsc_originatingrecordid",
+          "displayName": "Originating Record ID",
+          "type": "String",
+          "maxLength": 36,
+          "requiredLevel": "None"
+        },
+        {
+          "schemaName": "maftagsc_originatingrecordname",
+          "displayName": "Originating Record Name",
+          "type": "String",
+          "maxLength": 200,
+          "requiredLevel": "None"
+        },
+        {
+          "schemaName": "maftagsc_lastactivityon",
+          "displayName": "Last Activity On",
+          "type": "DateTime",
+          "format": "DateAndTime",
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_messagecount",
+          "displayName": "Message Count",
+          "type": "Integer",
+          "requiredLevel": "ApplicationRequired",
+          "defaultValue": 0
+        }
+      ],
+      "alternateKeys": [
+        {
+          "schemaName": "maftagsc_sidecarconversation_conversationid_key",
+          "columns": [
+            "maftagsc_conversationid"
+          ]
+        }
+      ]
+    },
+    {
+      "schemaName": "maftagsc_sidecaractivity",
+      "displayName": "Sidecar Conversation Activity",
+      "displayCollectionName": "Sidecar Conversation Activities",
+      "logicalSingularName": "maftagsc_sidecaractivity",
+      "entitySetName": "maftagsc_sidecaractivities",
+      "ownershipType": "UserOwned",
+      "primaryName": {
+        "schemaName": "maftagsc_name",
+        "displayName": "Activity Name",
+        "maxLength": 200
+      },
+      "columns": [
+        {
+          "schemaName": "maftagsc_activityid",
+          "displayName": "Activity ID",
+          "type": "String",
+          "maxLength": 100,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_sequence",
+          "displayName": "Sequence",
+          "type": "Integer",
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_role",
+          "displayName": "Conversation Role",
+          "type": "String",
+          "maxLength": 20,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_activitytype",
+          "displayName": "Activity Type",
+          "type": "String",
+          "maxLength": 50,
+          "requiredLevel": "ApplicationRequired"
+        },
+        {
+          "schemaName": "maftagsc_text",
+          "displayName": "Display Text",
+          "type": "Memo",
+          "maxLength": 100000,
+          "requiredLevel": "None"
+        },
+        {
+          "schemaName": "maftagsc_activitytimestamp",
+          "displayName": "Activity Timestamp",
+          "type": "DateTime",
+          "format": "DateAndTime",
+          "requiredLevel": "ApplicationRequired"
+        }
+      ],
+      "alternateKeys": [
+        {
+          "schemaName": "maftagsc_sidecaractivity_activityid_key",
+          "columns": [
+            "maftagsc_activityid"
+          ]
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "schemaName": "maftagsc_sidecarconfiguration_sidecarconversation",
+      "fromTable": "maftagsc_sidecarconversation",
+      "lookupSchemaName": "maftagsc_sidecarconfiguration",
+      "lookupDisplayName": "Sidecar Configuration",
+      "toTable": "maftagsc_sidecarconfiguration",
+      "required": true,
+      "cascadeDelete": true
+    },
+    {
+      "schemaName": "maftagsc_sidecarconversation_sidecaractivity",
+      "fromTable": "maftagsc_sidecaractivity",
+      "lookupSchemaName": "maftagsc_sidecarconversation",
+      "lookupDisplayName": "Sidecar Conversation",
+      "toTable": "maftagsc_sidecarconversation",
+      "required": true,
+      "cascadeDelete": true
+    }
+  ],
+  "security": {
+    "accessModel": "Both tables are user-owned. The Agent Sidecar User role supplies user-level create/read/write/append privileges for conversation rows, user-level create/read/append privileges for activity rows, and organization-level read/append-to access for sidecar configuration. Administrative roles may receive organization-level read for support and retention operations.",
+    "packagedRole": "Agent Sidecar User",
+    "sensitiveDataRules": [
+      "Never store access tokens, trusted context envelopes, full channelData, or connector payloads.",
+      "Persist only user-visible message text and bounded activity metadata.",
+      "Apply an environment retention policy appropriate for conversational data."
+    ]
+  }
+}

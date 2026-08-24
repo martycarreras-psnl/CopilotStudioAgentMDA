@@ -33,7 +33,9 @@ No client secret is created or shipped, and MSAL tokens use memory storage only.
 The maintained conversation source is `agentSidePane.ts`, the form launcher
 source is `agentSidePaneLauncher.ts`, and `agentSidePane.template.html`
 provides the accessible shell. Both TypeScript entries use the same app-keyed
-configuration repository. Build and type-check them from the repository root:
+configuration repository. `sidecarConversationRepository.ts` owns all Dataverse
+conversation-reference and activity access; the UI never writes these tables
+directly. Build and type-check them from the repository root:
 
 ```text
 pnpm run typecheck:model-driven
@@ -63,4 +65,12 @@ confirmation and the repository's deployment safeguards.
 7. Ask “What process should I follow before making this plan active?” and verify
    Benefits Administration process guidance is included.
 8. Navigate through each supported main form and confirm the same pane remains
-   available, the conversation is preserved, and the current page context updates.
+   available, the conversation is preserved, and navigation alone sends no agent
+   activity.
+9. Select **New conversation**, send a message, then select the prior conversation
+   under **Recent conversations**. Confirm its transcript reappears and the next
+   prompt continues the prior agent context.
+
+Runtime users need the packaged **Agent Sidecar User** security role in addition
+to their normal model-driven-app role. It grants user-level access to the
+user-owned conversation rows and read-only access to sidecar configuration.
