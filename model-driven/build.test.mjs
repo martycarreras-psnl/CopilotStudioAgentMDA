@@ -81,6 +81,8 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     assert.match(html, /Permanently delete the selected conversation/);
     assert.match(html, /Conversation deleted/);
     assert.match(html, /deleteRecord/);
+    assert.match(html, /Conversation ready/);
+    assert.match(html, /maftagsc_role eq/);
     assert.match(html, /conversationId:/);
     assert.match(html, /maftagsc_sidecarconversation/);
     assert.match(html, /DIRECT_LINE\/INCOMING_ACTIVITY/);
@@ -156,6 +158,7 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /deletedConversationIds\.add\(conversation\.id\)/);
     assert.match(source, /setAttribute\("inert", ""\)/);
     assert.match(source, /could not be deleted and was restored/);
+    assert.match(source, /conversation\.hasUserMessage/);
 });
 
 test("signed-in user security roles flow into the agent context", async () => {

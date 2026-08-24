@@ -345,6 +345,7 @@ function renderRecentConversationOptions(selectedId?: string): void {
     const deleteButton = getRequiredElement<HTMLButtonElement>("delete-conversation");
     const selected = selectedId ?? activeConversationReference?.id ?? "";
     const conversations = [...recentConversations.values()]
+        .filter(conversation => conversation.hasUserMessage)
         .sort((left, right) =>
             new Date(right.lastActivityOn).getTime() -
             new Date(left.lastActivityOn).getTime()
@@ -367,9 +368,15 @@ function renderRecentConversationOptions(selectedId?: string): void {
 
 function onConversationReferenceChanged(reference: SidecarConversationReference): void {
     activeConversationReference = reference;
-    recentConversations.set(reference.id, reference);
+    if (reference.hasUserMessage) {
+        recentConversations.set(reference.id, reference);
+    } else {
+        recentConversations.delete(reference.id);
+    }
     renderRecentConversationOptions(reference.id);
-    setHistoryStatus("Conversation saved.");
+    setHistoryStatus(
+        reference.hasUserMessage ? "Conversation saved." : "Conversation ready."
+    );
 }
 
 function handleSessionReferenceChanged(
@@ -379,7 +386,11 @@ function handleSessionReferenceChanged(
     if (deletedConversationIds.has(reference.id)) {
         return;
     }
-    recentConversations.set(reference.id, reference);
+    if (reference.hasUserMessage) {
+        recentConversations.set(reference.id, reference);
+    } else {
+        recentConversations.delete(reference.id);
+    }
     if (generation === activeConversationGeneration) {
         onConversationReferenceChanged(reference);
         return;

@@ -16,10 +16,10 @@ The core capability is **complete and working end to end** in two environments. 
 - **Per-form selection**: tables default off; expand a table to pick individual forms; the **Information** form is selected by default. Deploy binds only selected forms.
 - **Sign-in**: delegated MSAL PKCE completed via a same-origin **localStorage handshake** (COOP-proof); succeeds on the first attempt; loading splash title comes from the configured pane title.
 - **Navigation context**: the launcher writes the current form context to localStorage on every OnLoad without contacting the agent. The pane sends `pvaSetContext` and a trusted context envelope only when the user submits a prompt or explicitly starts a new conversation.
-- **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** resumes server context and replays the transcript without sending navigation context. **Delete** permanently removes a selected conversation and cascades to its saved activities after confirmation.
+- **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** includes only sessions with at least one user message, resumes server context, and replays the transcript without sending navigation context. **Delete** permanently removes a selected conversation and cascades to its saved activities after confirmation.
 - **Security**: the unassigned **Agent Sidecar User** role is packaged in `AgentSidecarCore`; assign it alongside each end user's normal application role. It includes user-level delete on conversation parents so users can remove only their own history.
 - **Deployed** to dev (`carremacodeapps`) and destination (`carrema Sales CS` / `org862d1967`). README repositioned as a reusable product.
-- **Green baseline**: `npm run typecheck`, `npm test` (39), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (8).
+- **Green baseline**: `npm run typecheck`, `npm test` (40), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (8).
 
 ## Environments and identity
 

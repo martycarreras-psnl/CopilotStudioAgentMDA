@@ -73,6 +73,9 @@ confirmation and the repository's deployment safeguards.
 10. Select **Delete**, cancel once to confirm the conversation remains, then
     confirm deletion. Verify the conversation disappears, its saved activities
     are removed, and a clean conversation opens.
+11. Open a fresh conversation and do not send a message. Confirm its greeting
+    does not appear under **Recent conversations**. Send a message and confirm
+    the conversation then appears.
 
 Runtime users need the packaged **Agent Sidecar User** security role in addition
 to their normal model-driven-app role. It grants user-level create, read, write,

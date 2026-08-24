@@ -7,6 +7,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 ## What's new
 
 - **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
+- **Meaningful conversation history.** Greeting-only sessions stay out of **Recent conversations** until the user sends a message, so startup noise does not crowd out useful history.
 - **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context (and are also exposed as a `CurrentUserRoles` variable for topic branching), so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
 - **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
 - **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
@@ -151,6 +152,8 @@ The primary record name is accepted only when the form's table and normalized re
 Selecting **New conversation** closes the current Agents SDK connection, clears the visible transcript, resolves the page open at that moment, and creates a fresh conversation without forcing another sign-in. The previous conversation remains available under **Recent conversations**. Selecting a recent conversation recreates the connection with its saved Agents SDK `conversationId` and replays its stored display activities; it does not send page context until the user submits another prompt.
 
 Selecting a saved conversation also enables **Delete**. After confirmation, the sidecar permanently deletes that user-owned conversation and its saved activities. Deleting the active conversation immediately opens a clean session; deletion cannot be undone.
+
+**Recent conversations** includes only sessions where the user sent at least one message. Agent greetings and other assistant-only startup messages may be stored briefly for the active connection, but they are excluded from the selector.
 
 ## Authentication and authorization
 

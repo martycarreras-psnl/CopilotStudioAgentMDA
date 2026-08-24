@@ -58,6 +58,7 @@ export interface SidecarConversationReference {
     title: string;
     lastActivityOn: string;
     messageCount: number;
+    hasUserMessage: boolean;
     originatingTable: string;
     originatingRecordId: string | null;
     originatingRecordName: string;
@@ -118,6 +119,7 @@ function toConversation(record: Record<string, unknown>): SidecarConversationRef
             "sidecar_conversation_timestamp_invalid"
         ),
         messageCount: Math.max(0, Number(record.maftagsc_messagecount ?? 0) || 0),
+        hasUserMessage: false,
         originatingTable: boundedText(record.maftagsc_originatingtable, MAX_TABLE_NAME_LENGTH),
         originatingRecordId: normalizeGuid(record.maftagsc_originatingrecordid),
         originatingRecordName: boundedText(
@@ -168,10 +170,15 @@ export class SidecarConversationRepository {
         const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
         const result = await this.webApi.retrieveMultipleRecords(
             CONVERSATION_TABLE,
-            `?$select=maftagsc_sidecarconversationid,maftagsc_conversationid,maftagsc_name,maftagsc_lastactivityon,maftagsc_messagecount,maftagsc_originatingtable,maftagsc_originatingrecordid,maftagsc_originatingrecordname&$filter=_ownerid_value eq ${ownerId} and _maftagsc_sidecarconfiguration_value eq ${configurationId} and maftagsc_appid eq '${escapeODataString(appId)}' and maftagsc_agentschemaname eq '${escapeODataString(agentSchemaName)}' and statecode eq 0&$orderby=maftagsc_lastactivityon desc&$top=${safeLimit}`,
+            `?$select=maftagsc_sidecarconversationid,maftagsc_conversationid,maftagsc_name,maftagsc_lastactivityon,maftagsc_messagecount,maftagsc_originatingtable,maftagsc_originatingrecordid,maftagsc_originatingrecordname&$filter=_ownerid_value eq ${ownerId} and _maftagsc_sidecarconfiguration_value eq ${configurationId} and maftagsc_appid eq '${escapeODataString(appId)}' and maftagsc_agentschemaname eq '${escapeODataString(agentSchemaName)}' and statecode eq 0 and maftagsc_sidecarconversation_sidecaractivity/any(activity:activity/maftagsc_role eq 'user')&$orderby=maftagsc_lastactivityon desc&$top=${safeLimit}`,
             safeLimit
         );
-        return result.entities.map(toConversation);
+        return result.entities
+            .map(toConversation)
+            .map(conversation => ({
+                ...conversation,
+                hasUserMessage: true
+            }));
     }
 
     async createConversation(
@@ -218,6 +225,7 @@ export class SidecarConversationRepository {
             title: safeTitle,
             lastActivityOn: safeTimestamp,
             messageCount: 0,
+            hasUserMessage: false,
             originatingTable: boundedText(origin.tableName, MAX_TABLE_NAME_LENGTH),
             originatingRecordId: normalizeGuid(origin.recordId),
             originatingRecordName: boundedText(origin.recordName, MAX_TITLE_LENGTH)
@@ -310,7 +318,8 @@ export class SidecarConversationRepository {
             ...conversation,
             title: nextTitle,
             lastActivityOn: timestamp,
-            messageCount: nextMessageCount
+            messageCount: nextMessageCount,
+            hasUserMessage: conversation.hasUserMessage || draft.role === "user"
         };
     }
 }

@@ -48,6 +48,7 @@ function createReference(
         title: "Contoso contact",
         lastActivityOn: "2026-08-24T20:00:00.000Z",
         messageCount: 0,
+        hasUserMessage: false,
         originatingTable: "contact",
         originatingRecordId: null,
         originatingRecordName: "Contoso contact",
@@ -84,6 +85,23 @@ describe("SidecarConversationRepository", () => {
         expect(options).toContain(`_maftagsc_sidecarconfiguration_value eq ${CONFIGURATION_ID}`);
         expect(options).toContain(`maftagsc_appid eq '${APP_ID}'`);
         expect(options).toContain("$orderby=maftagsc_lastactivityon desc");
+        expect(options).toContain(
+            "maftagsc_sidecarconversation_sidecaractivity/any(" +
+            "activity:activity/maftagsc_role eq 'user')"
+        );
+    });
+
+    it("filters out conversations that contain only assistant greetings", async () => {
+        const { api, retrieveMultipleRecords } = createWebApi();
+        retrieveMultipleRecords.mockResolvedValue({ entities: [] });
+        const repository = new SidecarConversationRepository(api);
+
+        await expect(repository.listRecent({
+            ownerId: OWNER_ID,
+            configurationId: CONFIGURATION_ID,
+            appId: APP_ID,
+            agentSchemaName: "cr88d_insightsandactions_AChDbK"
+        })).resolves.toEqual([]);
     });
 
     it("creates a user-owned conversation reference without storing trusted context", async () => {
@@ -149,6 +167,7 @@ describe("SidecarConversationRepository", () => {
             })
         );
         expect(updated.messageCount).toBe(1);
+        expect(updated.hasUserMessage).toBe(true);
     });
 
     it("recovers when an activity was created before its parent metadata update failed", async () => {
