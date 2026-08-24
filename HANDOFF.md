@@ -19,7 +19,7 @@ The core capability is **complete and working end to end** in two environments. 
 - **Durable conversations**: user-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` tables retain real Agents SDK conversation IDs and display-safe message history. **Recent conversations** resumes server context and replays the transcript without sending navigation context.
 - **Security**: the unassigned **Agent Sidecar User** role is packaged in `AgentSidecarCore`; assign it alongside each end user's normal application role.
 - **Deployed** to dev (`carremacodeapps`) and destination (`carrema Sales CS` / `org862d1967`). README repositioned as a reusable product.
-- **Green baseline**: `npm run typecheck`, `npm test` (37), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (7).
+- **Green baseline**: `npm run typecheck`, `npm test` (38), `npm run lint`, `npm run build`; model-driven `npm run typecheck:model-driven`, `npm run build:model-driven`, `npm run test:model-driven` (8).
 
 ## Environments and identity
 

@@ -1,12 +1,55 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { inflateRawSync } from "node:zlib";
 
 const sourceRoot = new URL("./webresources/maftagsc_/copilot/", import.meta.url);
 const solutionRoot = new URL("../solution/WebResources/maftagsc_/copilot/", import.meta.url);
 
 async function read(root, name) {
     return readFile(new URL(name, root), "utf8");
+}
+
+function readZipEntries(zip) {
+    const endSignature = 0x06054b50;
+    let endOffset = -1;
+    for (let offset = zip.length - 22; offset >= Math.max(0, zip.length - 65557); offset -= 1) {
+        if (zip.readUInt32LE(offset) === endSignature) {
+            endOffset = offset;
+            break;
+        }
+    }
+    assert.notEqual(endOffset, -1, "ZIP end-of-central-directory record is missing");
+
+    const entryCount = zip.readUInt16LE(endOffset + 10);
+    let offset = zip.readUInt32LE(endOffset + 16);
+    const entries = new Map();
+    for (let index = 0; index < entryCount; index += 1) {
+        assert.equal(zip.readUInt32LE(offset), 0x02014b50);
+        const compressionMethod = zip.readUInt16LE(offset + 10);
+        const compressedSize = zip.readUInt32LE(offset + 20);
+        const fileNameLength = zip.readUInt16LE(offset + 28);
+        const extraLength = zip.readUInt16LE(offset + 30);
+        const commentLength = zip.readUInt16LE(offset + 32);
+        const localHeaderOffset = zip.readUInt32LE(offset + 42);
+        const name = zip
+            .subarray(offset + 46, offset + 46 + fileNameLength)
+            .toString("utf8");
+
+        assert.equal(zip.readUInt32LE(localHeaderOffset), 0x04034b50);
+        const localNameLength = zip.readUInt16LE(localHeaderOffset + 26);
+        const localExtraLength = zip.readUInt16LE(localHeaderOffset + 28);
+        const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+        const compressed = zip.subarray(dataOffset, dataOffset + compressedSize);
+        const content = compressionMethod === 0
+            ? compressed
+            : compressionMethod === 8
+                ? inflateRawSync(compressed)
+                : assert.fail(`Unsupported ZIP compression method ${compressionMethod}`);
+        entries.set(name, content);
+        offset += 46 + fileNameLength + extraLength + commentLength;
+    }
+    return entries;
 }
 
 test("generated side pane uses the registered scope and dedicated popup redirect", async () => {
@@ -155,6 +198,26 @@ test("solution projections exactly match maintained web resources", async () => 
     assert.equal(
         await read(solutionRoot, "agentGuideLibrary.svg"),
         await read(sourceRoot, "agentGuideLibrary.svg")
+    );
+});
+
+test("core solution packages persistent conversation metadata and runtime", async () => {
+    const packageBytes = await readFile(
+        new URL("../solution-core/AgentSidecarCore.zip", import.meta.url)
+    );
+    const entries = readZipEntries(packageBytes);
+    const customizations = entries.get("customizations.xml")?.toString("utf8") ?? "";
+    assert.match(customizations, /maftagsc_sidecarconversation/);
+    assert.match(customizations, /maftagsc_sidecaractivity/);
+    assert.match(customizations, /Agent Sidecar User/);
+
+    const packagedRuntime = [...entries.entries()].find(([name]) =>
+        name.startsWith("WebResources/maftagsc_copilotagentSidePanehtml")
+    )?.[1];
+    assert.ok(packagedRuntime, "Packaged side-pane runtime is missing");
+    assert.deepEqual(
+        packagedRuntime,
+        await readFile(new URL("agentSidePane.html", sourceRoot))
     );
 });
 
