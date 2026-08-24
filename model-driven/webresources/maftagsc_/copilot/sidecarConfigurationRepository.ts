@@ -43,7 +43,7 @@ implements SidecarConfigurationRepository {
         const escapedAppId = normalizedAppId.replace(/'/g, "''");
         const configurationResult = await this.getWebApi().retrieveMultipleRecords(
             "maftagsc_sidecarconfiguration",
-            `?$select=maftagsc_sidecarconfigurationid,maftagsc_appid,maftagsc_panetitle,maftagsc_panewidth,maftagsc_publicclientapplicationid,maftagsc_tenantid,maftagsc_environmentid,maftagsc_agentschemaname,statecode,statuscode&$filter=maftagsc_appid eq '${escapedAppId}' and statecode eq 0`,
+            `?$select=maftagsc_sidecarconfigurationid,maftagsc_appid,maftagsc_panetitle,maftagsc_panewidth,maftagsc_publicclientapplicationid,maftagsc_tenantid,maftagsc_environmentid,maftagsc_agentschemaname,maftagsc_agentconnectionstring,statecode,statuscode&$filter=maftagsc_appid eq '${escapedAppId}' and statecode eq 0`,
             2
         );
         if (configurationResult.entities.length !== 1) {
@@ -82,6 +82,7 @@ implements SidecarConfigurationRepository {
             tenantId: String(record.maftagsc_tenantid ?? ""),
             environmentId: String(record.maftagsc_environmentid ?? ""),
             agentSchemaName: String(record.maftagsc_agentschemaname ?? ""),
+            agentConnectionString: String(record.maftagsc_agentconnectionstring ?? ""),
             scope: "https://api.powerplatform.com/CopilotStudio.Copilots.Invoke",
             redirectPath: "/WebResources/maftagsc_/copilot/authRedirect.html",
             contextLabel: `${String(record.maftagsc_panetitle ?? "Agent Sidecar")} app`,

@@ -18,13 +18,15 @@ The deployable Dataverse copies are created as web resources in the
 - Initial presentation: persistent and collapsed (`canClose: false`,
    `isSelected: false`, `alwaysRender: true`)
 
-The side pane uses four non-secret identifiers: Application (client) ID,
-Directory (tenant) ID, Power Platform environment ID, and Copilot Studio agent
-schema name. The generic runtime resolves an enabled configuration by the
+The side pane uses five non-secret values: Application (client) ID, Directory
+(tenant) ID, Power Platform environment ID, Copilot Studio agent schema name,
+and the Microsoft 365 Agents SDK connection string copied from the Web app
+channel. The connection string is passed to the SDK as `directConnectUrl`, so
+standard and GitHub Copilot harness agents use the runtime endpoint selected by
+Copilot Studio. The generic runtime resolves an enabled configuration by the
 current Model-driven App ID and fails closed when no unique match exists. The
-current HR values remain in `hrSidecarBootstrap.ts` as a compatibility bridge
-until the runtime configuration repository is implemented. No client secret is
-created or shipped, and MSAL tokens use memory storage only.
+current HR values remain in `hrSidecarBootstrap.ts` as a compatibility bridge.
+No client secret is created or shipped, and MSAL tokens use memory storage only.
 
 ## Build
 

@@ -401,7 +401,7 @@ export function SidecarWizard({
           {step === 2 && (
             <div className={styles.stack}>
               <div><Title2 as="h2">Connect the agent</Title2><Text className={styles.muted}>In Copilot Studio, open the published agent, then go to Channels &gt; Web app. Under Microsoft 365 Agents SDK, copy the connection string—not the public iframe embed code.</Text></div>
-              <ConfigField field="agentConnectionString" label="Microsoft 365 Agents SDK connection string" hint="Expected format: https://…environment.api.powerplatform.com/copilotstudio/…/bots/{agentName}/conversations?api-version=…" required>
+              <ConfigField field="agentConnectionString" label="Microsoft 365 Agents SDK connection string" hint="Paste the full standard- or GitHub-harness URL exactly as Copilot Studio provides it." required>
                 <Textarea resize="vertical" value={agentLink} onChange={(_, data) => { setAgentLink(data.value); setAgent(undefined); }} placeholder="Paste the connection string from Channels > Web app" />
               </ConfigField>
               <ConfigField field="environmentId" label="Environment ID" hint="Copy this GUID from Copilot Studio Settings > Advanced > Metadata." required>

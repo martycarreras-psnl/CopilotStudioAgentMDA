@@ -631,8 +631,7 @@ function renderConversation(
     }
 
     const settings = new ConnectionSettings({
-        environmentId: configuration.environmentId,
-        schemaName: configuration.agentSchemaName
+        directConnectUrl: configuration.agentConnectionString
     });
     const client = new CopilotStudioClient(settings, token);
     const connection = CopilotStudioWebChat.createConnection(client, {

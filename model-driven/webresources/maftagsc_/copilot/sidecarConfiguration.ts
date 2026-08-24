@@ -1,3 +1,5 @@
+import { parseSupportedCopilotStudioConnectionUrl } from "../../../../shared/copilotStudioConnectionString";
+
 export interface SidecarEntityBinding {
     logicalName: string;
     screenName: string;
@@ -15,6 +17,7 @@ export interface SidecarConfiguration {
     tenantId: string;
     environmentId: string;
     agentSchemaName: string;
+    agentConnectionString: string;
     scope: string;
     redirectPath: string;
     contextLabel: string;
@@ -84,6 +87,9 @@ export function assertSidecarConfiguration(configuration: SidecarConfiguration):
         configuration.defaultScreenName
     ];
     const bindingEntries = Object.entries(configuration.entityBindings);
+    const agentConnection = parseSupportedCopilotStudioConnectionUrl(
+        configuration.agentConnectionString
+    );
 
     if (
         identifiers.some(identifier => !normalizeGuid(identifier)) ||
@@ -93,6 +99,8 @@ export function assertSidecarConfiguration(configuration: SidecarConfiguration):
         configuration.paneWidth > 1000 ||
         !configuration.webResourceName.endsWith(".html") ||
         !AGENT_SCHEMA_NAME_PATTERN.test(configuration.agentSchemaName) ||
+        !agentConnection ||
+        agentConnection.schemaName !== configuration.agentSchemaName ||
         !configuration.redirectPath.startsWith("/WebResources/") ||
         bindingEntries.length === 0 ||
         bindingEntries.some(([key, binding]) =>

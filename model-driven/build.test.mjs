@@ -13,6 +13,9 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     const html = await read(sourceRoot, "agentSidePane.html");
 
     assert.match(html, /https:\/\/api\.powerplatform\.com\/CopilotStudio\.Copilots\.Invoke/);
+    assert.match(html, /maftagsc_agentconnectionstring/);
+    assert.match(html, /directConnectUrl/);
+    assert.match(html, /agenticruntime/);
     assert.doesNotMatch(html, /api\.powerplatform\.com\/CopilotStudio\.Invoke/);
     assert.match(html, /\/WebResources\/maftagsc_\/copilot\/authRedirect\.html/);
     assert.match(html, /cr0b1_HRMgmtClassic/);

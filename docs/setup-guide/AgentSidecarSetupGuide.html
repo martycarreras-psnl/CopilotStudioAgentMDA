@@ -356,7 +356,7 @@
         </div>
         <div style="margin-top:12px">
           <label>Agents SDK connection string</label>
-          <div class="finput"><input id="w-connstr" data-key="connstr" placeholder="https://…/copilotstudio/…/bots/&lt;schema&gt;/conversations?api-version=…" /><button type="button" class="fcopy" data-copy="connstr">Copy</button></div>
+          <div class="finput"><input id="w-connstr" data-key="connstr" placeholder="https://…environment.api.powerplatform.com/copilotstudio/…/bots/&lt;schema&gt;?api-version=…" /><button type="button" class="fcopy" data-copy="connstr">Copy</button></div>
           <div class="hint">Copilot Studio &rsaquo; your agent &rsaquo; <b>Channels &rsaquo; Web app / Microsoft 365 Agents SDK</b>. Copy the connection string (not the iframe embed). Paste it in wizard Step 3.</div>
         </div>
         <div class="callout info" style="margin-bottom:0">
@@ -474,7 +474,7 @@
         </li>
         <li><b>Publish the agent.</b> Select <b>Publish</b> (top-right). The sidecar only binds to a <b>published</b> agent.</li>
         <li><b>Get the Agents SDK connection string.</b> Open <b>Channels</b> and select the <b>Web app</b> / <b>Microsoft 365 Agents SDK</b> channel. Copy the <b>connection string</b> (a URL). You will paste it in wizard Step 3.
-          <div class="callout info"><div class="t">What a valid connection string looks like</div>It must be an <b>https</b> URL, contain a <code class="inline">/bots/&lt;schema&gt;/</code> segment (or <code class="inline">?agentName=&lt;schema&gt;</code>), and end in <code class="inline">/conversations</code>. Copy the <b>Agents SDK connection string</b>, <b>not</b> the public iframe embed code.</div>
+          <div class="callout info"><div class="t">What a valid connection string looks like</div>It must be the complete <b>https</b> URL copied from this channel. Standard-harness URLs include <code class="inline">/dataverse-backed/authenticated/bots/&lt;schema&gt;/conversations</code>. GitHub Copilot harness URLs include <code class="inline">/agenticruntime/3p/dataverse-backed/authenticated/bots/&lt;schema&gt;</code> and might not end in <code class="inline">/conversations</code>. Copy the <b>Agents SDK connection string</b>, <b>not</b> the public iframe embed code.</div>
           <figure class="shot">
             <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Channels &rsaquo; Web app / Agents SDK</span></div>
               <img src="img/08-cps-connection-string.png" alt="CPS connection string" onerror="this.closest('.shot-frame').classList.add('missing')">
@@ -664,7 +664,7 @@ pac code push -s AgentSidecarCore</code></pre></div>
       <table class="tbl">
         <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
         <tr><td>Sign-in fails with a <b>redirect URI mismatch</b></td><td>The Azure SPA redirect URI doesn't exactly match the wizard's. Re-copy the computed URI (<code class="inline" data-bind="redirect">…</code>) into Entra &rsaquo; Authentication.</td></tr>
-        <tr><td>Agent won't resolve in Step 3</td><td>The agent must be <b>published</b>, <b>active</b>, and <b>Authenticate with Microsoft</b>. The connection string must be https, contain <code class="inline">/bots/&lt;schema&gt;/</code>, and end in <code class="inline">/conversations</code>. Confirm the Environment ID matches the app's environment.</td></tr>
+        <tr><td>Agent won't resolve in Step 3</td><td>The agent must be <b>published</b>, <b>active</b>, and <b>Authenticate with Microsoft</b>. Paste the complete https Agents SDK connection string from the Web app channel; GitHub Copilot harness URLs might not end in <code class="inline">/conversations</code>. Confirm the Environment ID matches the app's environment.</td></tr>
         <tr><td>"Consent required" / token errors</td><td>Admin consent for <code class="inline">CopilotStudio.Copilots.Invoke</code> was not granted. Re-grant in Entra &rsaquo; API permissions.</td></tr>
         <tr><td>Pane loads but no answer / 401 from agent</td><td>Token-broker plugin secure configuration not set for this environment, or the user lacks chat access to the agent. Set the secure config and share the agent.</td></tr>
         <tr><td>App shows no eligible apps/tables</td><td>Confirm the <b>AgentSidecarCore</b> solution imported successfully (it contains the app + tables) and that the app's <b>connection reference(s)</b> are mapped. The app reads live Dataverse metadata as the signed-in user, who needs System Administrator/Customizer rights.</td></tr>

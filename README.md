@@ -117,7 +117,7 @@ sequenceDiagram
 | **Persistent side pane** | Keyed per app, it starts collapsed and preserves the active conversation as the user navigates between records. |
 | **HTML host and client** | Hosts Web Chat, signs the user in, creates the Agents SDK connection, keeps context current, and manages conversation reset. |
 | **Microsoft Entra app registration** | Authenticates the signed-in user with authorization code + PKCE and requests only `https://api.powerplatform.com/CopilotStudio.Copilots.Invoke`. No browser client secret exists. |
-| **Microsoft 365 Agents SDK** | `CopilotStudioClient` connects to your Copilot Studio environment and agent schema using the delegated user token. |
+| **Microsoft 365 Agents SDK** | `CopilotStudioClient` uses the Web app channel connection string as its direct endpoint with the delegated user token. |
 | **Your Copilot Studio agent** | Interprets the question and uses the supplied screen context to select relevant guidance from its knowledge. |
 | **Agent Sidecar Core solution** | Packages the sidecar tables, web resources, and the administration app. Import it to bring the whole capability into an environment. |
 | **Administration app** | The System Administrator experience for deploying, validating, reconciling, and removing sidecars. Built as a Power Apps Code App and shipped inside the Core solution. |
