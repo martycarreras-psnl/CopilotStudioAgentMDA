@@ -8,7 +8,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 
 - **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
 - **Meaningful conversation history.** Greeting-only sessions stay out of **Recent conversations** until the user sends a message, so startup noise does not crowd out useful history.
-- **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context (and are also exposed as a `CurrentUserRoles` variable for topic branching), so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
+- **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context, so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
 - **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
 - **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
 
@@ -80,7 +80,7 @@ flowchart LR
 	Host -->|authorization code + PKCE| Entra[Microsoft Entra ID]
 	Entra -->|delegated access token| Host
 	Host -->|CopilotStudioClient| Agent[Your<br/>Copilot Studio agent]
-	Host -->|pvaSetContext + trusted<br/>per-message context envelope| Agent
+	Host -->|trusted per-message<br/>context envelope| Agent
 	Agent -->|user-scoped retrieval| Knowledge[(Your knowledge<br/>source)]
 	Agent -->|streamed activities| Host
 	Host --> WebChat[Bot Framework Web Chat]
@@ -102,7 +102,7 @@ sequenceDiagram
 	U->>P: Opens library icon and sends a message
 	P->>F: Resolve current page, table, record ID, and record name
 	P->>P: Validate and bound the context
-	P->>A: Add pvaSetContext and trusted message envelope
+	P->>A: Add trusted context envelope to the message
 	A->>C: Send message with delegated user token
 	C->>K: Retrieve only knowledge the user may access
 	K-->>C: Authorized grounding results
@@ -142,10 +142,7 @@ The context includes:
 | `recordName` | Matching form primary attribute | Gives the user a friendly orientation after table and record ID are verified. |
 | `appId` | Current app properties | Confirms the model-driven app context when available. |
 
-Two mechanisms deliver that context to the agent:
-
-1. A `pvaSetContext` event updates Copilot Studio conversation variables when the user sends a message or explicitly starts a new conversation.
-2. A trusted, bounded context envelope accompanies every outbound user message.
+A trusted, bounded context envelope accompanies every outbound user message. Context is part of the real user activity rather than a separate event, so the agent receives one input and produces one conversational turn.
 
 The primary record name is accepted only when the form's table and normalized record ID match the current page context, so a record name from the previously viewed screen never leaks into the next question.
 

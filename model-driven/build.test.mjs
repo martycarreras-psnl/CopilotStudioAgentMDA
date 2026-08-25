@@ -63,18 +63,17 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     assert.match(html, /\/WebResources\/maftagsc_\/copilot\/authRedirect\.html/);
     assert.match(html, /cr0b1_HRMgmtClassic/);
     assert.doesNotMatch(html, /Default_HR_Management_App_Guide_9e5461/);
-    assert.match(html, /pvaSetContext/);
+    assert.doesNotMatch(html, /pvaSetContext/);
     assert.match(html, /HR Management app/);
-    assert.match(html, /CurrentAppId/);
-    assert.match(html, /CurrentPageType/);
-    assert.match(html, /CurrentRecordId/);
-    assert.match(html, /CurrentUserRoles/);
+    assert.match(html, /\[Trusted/);
+    assert.match(html, /App ID:/);
+    assert.match(html, /Record ID:/);
     assert.match(html, /signed-in user holds these roles/);
     assert.match(html, /Benefit Plan record form/);
     assert.match(html, /Segoe UI Web \(West European\)/);
     assert.match(html, /primaryFont/);
     assert.match(html, /getPageContext/);
-    assert.match(html, /WEB_CHAT\/SEND_MESSAGE/);
+    assert.doesNotMatch(html, /WEB_CHAT\/SEND_EVENT/);
     assert.match(html, /entitylist/);
     assert.match(html, /New conversation/);
     assert.match(html, /Recent conversations/);
@@ -142,15 +141,14 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /Utility\?\.getPageContext/);
     assert.match(source, /getPrimaryAttributeValue/);
     assert.match(source, /formEntityName !== entityName \|\| formRecordId !== recordId/);
-    assert.match(source, /action\.type === "WEB_CHAT\/SEND_MESSAGE"/);
+    assert.match(source, /connection\.postActivity = \(activity: Activity\)/);
     assert.match(source, /recordName: currentRecordName \?\? \(isSameRecord \? fallback\.recordName : ""\)/);
     assert.match(source, /createContextEnvelope\(currentContext, originalText, configuration\)/);
     assert.match(source, /resolveContext\(activeContext, activeConfiguration\)/);
     assert.match(source, /readSharedContext\(configuration, fallback\)/);
     assert.doesNotMatch(source, /startNavigationWatcher/);
-    assert.match(source, /sendContextOnConnect && action\.type === "DIRECT_LINE\/CONNECT_FULFILLED"/);
-    assert.match(source, /action\.type === "WEB_CHAT\/SEND_MESSAGE"/);
-    assert.match(source, /activeConfiguration,\s+true/);
+    assert.doesNotMatch(source, /pvaSetContext/);
+    assert.doesNotMatch(source, /WEB_CHAT\/SEND_EVENT/);
     assert.match(source, /await sidecarConfigurationRepository\.getByAppId\(appId\)/);
     assert.match(source, /activity\.sequence - replaySequenceOffset/);
     assert.match(source, /generation === activeConversationGeneration/);
@@ -175,24 +173,23 @@ test("signed-in user security roles flow into the agent context", async () => {
     assert.match(launcherSource, /roles: getUserRoles\(\)/);
     assert.match(launcherSource, /normalizeUserRoles/);
 
-    // Pane parses, reads shared roles, signs on them, and surfaces them in the
-    // user-initiated pvaSetContext event and the trusted per-message envelope.
+    // Pane parses, reads shared roles, signs on them, and surfaces them only in
+    // the trusted per-message envelope.
     assert.match(paneSource, /roles: normalizeUserRoles\(value\.roles\)/);
     assert.match(paneSource, /parsed\.roles !== undefined \? normalizeUserRoles\(parsed\.roles\) : fallback\.roles/);
     assert.match(paneSource, /formatUserRolesLine\(context\.roles\)/);
-    assert.match(paneSource, /CurrentUserRoles: serializeUserRoles\(context\.roles\)/);
-    assert.doesNotMatch(paneSource, /CurrentUserRoles: serializeUserRoles\(next\.roles\)/);
+    assert.doesNotMatch(paneSource, /CurrentUserRoles/);
 
     // Roles are de-duplicated and bounded; only role names are handled.
     assert.match(rolesSource, /MAX_USER_ROLES/);
     assert.match(rolesSource, /MAX_ROLE_NAME_LENGTH/);
     assert.match(rolesSource, /signed-in user holds these roles/);
 
-    // Built artifacts carry the new variable and envelope line.
+    // Built artifacts carry the envelope line without a separate context event.
     const html = await read(sourceRoot, "agentSidePane.html");
     const launcher = await read(sourceRoot, "agentSidePane.js");
-    assert.match(html, /CurrentUserRoles/);
     assert.match(html, /signed-in user holds these roles/);
+    assert.doesNotMatch(html, /pvaSetContext/);
     assert.match(launcher, /getAll/);
 });
 

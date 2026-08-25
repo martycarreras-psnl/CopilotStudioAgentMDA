@@ -30,12 +30,6 @@ export function normalizeUserRoles(values: unknown): string[] {
     return roles;
 }
 
-// Semicolon-delimited string for the pvaSetContext variable. A single string is
-// the simplest shape to reference from Copilot Studio topics and instructions.
-export function serializeUserRoles(roles: readonly string[]): string {
-    return roles.join("; ");
-}
-
 // Clearly labeled line for the trusted per-message context envelope.
 export function formatUserRolesLine(roles: readonly string[]): string {
     return roles.length > 0

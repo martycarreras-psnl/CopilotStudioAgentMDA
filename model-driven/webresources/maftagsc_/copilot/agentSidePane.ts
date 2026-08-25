@@ -28,8 +28,7 @@ import {
 } from "./sidecarConversationRepository";
 import {
     formatUserRolesLine,
-    normalizeUserRoles,
-    serializeUserRoles
+    normalizeUserRoles
 } from "./sidecarUserRoles";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
@@ -646,35 +645,10 @@ function createContextEnvelope(
 
 function createContextStore(
     webChat: WebChatApi,
-    getContext: () => LaunchContext,
-    configuration: SidecarConfiguration,
-    sendContextOnConnect: boolean,
     persistence: SidecarConversationSession | null,
     getConversationId: () => string | undefined
 ): WebChatStore {
-    return webChat.createStore({}, ({ dispatch }) => next => action => {
-        if (
-            (sendContextOnConnect && action.type === "DIRECT_LINE/CONNECT_FULFILLED") ||
-            action.type === "WEB_CHAT/SEND_MESSAGE"
-        ) {
-            const context = getContext();
-            dispatch({
-                type: "WEB_CHAT/SEND_EVENT",
-                payload: {
-                    name: "pvaSetContext",
-                    value: {
-                        CurrentAppId: context.appId,
-                        CurrentPageType: context.pageType,
-                        CurrentScreen: getScreenName(context, configuration),
-                        CurrentTable: context.entityName,
-                        CurrentRecordId: context.recordId,
-                        CurrentRecordName: context.recordName,
-                        CurrentUserRoles: serializeUserRoles(context.roles)
-                    }
-                }
-            });
-        }
-
+    return webChat.createStore({}, () => next => action => {
         const activity = action.payload?.activity;
         const originalText = activity?.channelData?.[ORIGINAL_TEXT_KEY];
         const isReplay = activity?.channelData?.[REPLAY_ACTIVITY_KEY] === true;
@@ -771,7 +745,6 @@ async function renderConversation(
     token: string,
     context: LaunchContext,
     configuration: SidecarConfiguration,
-    sendContextOnConnect = false,
     resumeConversation?: SidecarConversationReference
 ): Promise<void> {
     if (
@@ -836,11 +809,11 @@ async function renderConversation(
             }
         } as Activity);
     };
-    const store = createContextStore(window.WebChat, () => {
-        const currentContext = resolveContext(activeContext ?? context, configuration);
-        activeContext = currentContext;
-        return currentContext;
-    }, configuration, sendContextOnConnect, persistence, () => connection.conversationId);
+    const store = createContextStore(
+        window.WebChat,
+        persistence,
+        () => connection.conversationId
+    );
 
     const chat = getRequiredElement<HTMLElement>("chat");
     const webChat = getRequiredElement<HTMLElement>("webchat");
@@ -900,8 +873,7 @@ async function startNewConversation(): Promise<void> {
         await renderConversation(
             activeToken,
             resolveContext(activeContext, activeConfiguration),
-            activeConfiguration,
-            true
+            activeConfiguration
         );
     } catch (error) {
         getRequiredElement<HTMLElement>("chat").hidden = true;
@@ -944,7 +916,6 @@ async function resumeConversation(conversationRecordId: string): Promise<void> {
             activeToken,
             resolveContext(activeContext, activeConfiguration),
             activeConfiguration,
-            false,
             conversation
         );
     } catch (error) {
@@ -1024,7 +995,6 @@ async function deleteSelectedConversation(): Promise<void> {
                         activeToken,
                         resolveContext(activeContext, activeConfiguration),
                         activeConfiguration,
-                        false,
                         conversation
                     );
                     setHistoryStatus(

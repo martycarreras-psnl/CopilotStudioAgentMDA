@@ -76,6 +76,8 @@ confirmation and the repository's deployment safeguards.
 11. Open a fresh conversation and do not send a message. Confirm its greeting
     does not appear under **Recent conversations**. Send a message and confirm
     the conversation then appears.
+12. Confirm each user prompt produces one conversational response path and no
+    additional "message not received" response from a context event.
 
 Runtime users need the packaged **Agent Sidecar User** security role in addition
 to their normal model-driven-app role. It grants user-level create, read, write,
