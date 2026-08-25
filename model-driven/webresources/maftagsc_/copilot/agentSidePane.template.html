@@ -42,7 +42,7 @@
             width: 100%;
             height: 100%;
             display: grid;
-            grid-template-rows: auto minmax(0, 1fr);
+            grid-template-rows: auto auto minmax(0, 1fr);
         }
 
         .chat-toolbar {
@@ -90,6 +90,20 @@
             overflow: hidden;
             clip: rect(0 0 0 0);
             white-space: nowrap;
+        }
+
+        #list-analysis-error {
+            margin: 0;
+            padding: 8px 12px;
+            color: #8a1c14;
+            background: #fff2f1;
+            border-bottom: 1px solid #ffccc7;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        #list-analysis-error[hidden] {
+            display: none;
         }
 
         #new-conversation {
@@ -151,6 +165,86 @@
         #webchat {
             min-width: 0;
             min-height: 0;
+        }
+
+        #list-scope-dialog {
+            width: min(360px, calc(100% - 32px));
+            padding: 0;
+            border: 0;
+            border-radius: 18px;
+            color: #1c1c1e;
+            background: #ffffff;
+            box-shadow: 0 12px 36px rgb(0 0 0 / 24%);
+        }
+
+        #list-scope-dialog::backdrop {
+            background: rgb(0 0 0 / 32%);
+        }
+
+        .list-scope-content {
+            padding: 20px;
+        }
+
+        .list-scope-content h2 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .list-scope-content p {
+            margin: 0;
+            color: #636366;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .list-scope-warning {
+            margin-top: 12px !important;
+            color: #8a4b08 !important;
+        }
+
+        #list-scope-current-unavailable {
+            margin-top: 12px;
+            color: #8a1c14;
+        }
+
+        .list-scope-actions {
+            display: grid;
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .list-scope-actions button {
+            min-height: 38px;
+            padding: 7px 14px;
+            border: 1px solid #c7c7cc;
+            border-radius: 19px;
+            color: #007aff;
+            background: #ffffff;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .list-scope-actions button:hover {
+            border-color: #007aff;
+            background: #f2f2f7;
+        }
+
+        .list-scope-actions button:disabled {
+            color: #8e8e93;
+            border-color: #d1d1d6;
+            background: #f2f2f7;
+            cursor: not-allowed;
+        }
+
+        .list-scope-actions button:focus-visible {
+            outline: 2px solid #007aff;
+            outline-offset: 2px;
+        }
+
+        #list-scope-cancel {
+            color: #636366;
         }
 
         .status-card {
@@ -248,8 +342,22 @@
                 disabled
             >Delete</button>
         </div>
+        <p id="list-analysis-error" role="alert" hidden></p>
         <div id="webchat"></div>
     </div>
+    <dialog id="list-scope-dialog" aria-labelledby="list-scope-title">
+        <div class="list-scope-content">
+            <h2 id="list-scope-title">Which records should I use?</h2>
+            <p>Choose the records for this request. No list details are sent to the agent until you choose.</p>
+            <p class="list-scope-warning">Large views or tables can take longer and may exceed processing limits. Narrow the view when possible.</p>
+            <p id="list-scope-current-unavailable" hidden>Current view details are unavailable on this screen. You can still choose all accessible records.</p>
+            <div class="list-scope-actions">
+                <button id="list-scope-current" type="button">Current view (all matching rows)</button>
+                <button id="list-scope-all" type="button">All accessible records</button>
+                <button id="list-scope-cancel" type="button">Cancel</button>
+            </div>
+        </div>
+    </dialog>
 
     <script src="https://cdn.botframework.com/botframework-webchat/latest/webchat.js"></script>
     <!-- HR_AGENT_SIDEPANE_BUNDLE -->

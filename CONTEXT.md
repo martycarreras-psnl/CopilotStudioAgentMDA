@@ -85,3 +85,7 @@ _Avoid_: Benefit election, plan membership
 **HR Management App Guide**:
 The HR Management app's Agent Sidecar, connected to the existing HR Mgmt Classic Copilot Studio agent and supplied only the approved minimal page context.
 _Avoid_: HR Copilot Side Pane, HR chatbot
+
+**List Analysis**:
+Analysis or processing requested while viewing a table list, explicitly scoped by the user to either every record matching the Current View or all accessible records in the table.
+_Avoid_: Automatic grid context, background list processing

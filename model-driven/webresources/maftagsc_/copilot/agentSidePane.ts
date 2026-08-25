@@ -30,9 +30,18 @@ import {
     formatUserRolesLine,
     normalizeUserRoles
 } from "./sidecarUserRoles";
+import {
+    createAllRecordsSelection,
+    createCurrentViewSelection,
+    formatListAnalysisContext,
+    isListAnalysisRequest,
+    type ListAnalysisScope,
+    type ListAnalysisSelection
+} from "./sidecarListAnalysis";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
 const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
+const LIST_ANALYSIS_SELECTION_KEY = "maftagscListAnalysisSelection";
 const AUTH_REQUEST_KEY = "maftagsc.sidecar.authRequest";
 const AUTH_RESULT_PREFIX = "maftagsc.sidecar.authResult.";
 
@@ -43,6 +52,8 @@ interface LaunchContext {
     recordName: string;
     appId: string | null;
     roles: string[];
+    viewId: string | null;
+    viewType: "savedquery" | "userquery" | null;
 }
 
 interface LaunchRequest {
@@ -54,6 +65,8 @@ interface HostPageInput {
     pageType?: unknown;
     entityName?: unknown;
     entityId?: unknown;
+    viewId?: unknown;
+    viewType?: unknown;
 }
 
 interface HostFormEntity {
@@ -73,6 +86,13 @@ interface HostXrm {
             entity?: HostFormEntity;
         };
     };
+    WebApi?: {
+        retrieveRecord(
+            entityLogicalName: string,
+            id: string,
+            options?: string
+        ): Promise<Record<string, unknown>>;
+    };
 }
 
 interface WebChatApi {
@@ -91,6 +111,8 @@ interface WebChatAction {
     type: string;
     payload?: {
         activity?: Partial<Activity>;
+        text?: unknown;
+        channelData?: Record<string, unknown>;
         [key: string]: unknown;
     };
     [key: string]: unknown;
@@ -169,7 +191,9 @@ async function parseLaunchRequest(): Promise<LaunchRequest> {
             recordId,
             recordName: String(value.recordName || "").slice(0, 200),
             appId,
-            roles: normalizeUserRoles(value.roles)
+            roles: normalizeUserRoles(value.roles),
+            viewId: null,
+            viewType: null
         }
     };
 }
@@ -223,6 +247,11 @@ function getCurrentContext(
         }
 
         const recordId = pageType === "entityrecord" ? normalizeGuid(input?.entityId) : null;
+        const viewId = pageType === "entitylist" ? normalizeGuid(input?.viewId) : null;
+        const viewType = pageType === "entitylist" &&
+            (input?.viewType === "savedquery" || input?.viewType === "userquery")
+            ? input.viewType
+            : null;
         const isSameRecord = pageType === "entityrecord" &&
             fallback.pageType === "entityrecord" &&
             fallback.entityName === entityName &&
@@ -237,16 +266,18 @@ function getCurrentContext(
             recordId,
             recordName: currentRecordName ?? (isSameRecord ? fallback.recordName : ""),
             appId: fallback.appId,
-            roles: fallback.roles
+            roles: fallback.roles,
+            viewId,
+            viewType
         };
     } catch {
         return fallback;
     }
 }
 
-// The launcher writes the authoritative current-form context here on every
-// navigation. Prefer it (COOP- and partition-safe, same origin) over reading the
-// host Xrm from inside the pane, which is unreliable across frames.
+// The launcher writes authoritative form context on every form load. List pages
+// have no equivalent form event, so a supported live entity-list context may
+// override this same-origin fallback while record pages continue to prefer it.
 function readSharedContext(
     configuration: SidecarConfiguration,
     fallback: LaunchContext
@@ -266,7 +297,11 @@ function readSharedContext(
             recordId: parsed.recordId ? normalizeGuid(parsed.recordId) : null,
             recordName: typeof parsed.recordName === "string" ? parsed.recordName.slice(0, 200) : "",
             appId: parsed.appId ?? fallback.appId,
-            roles: parsed.roles !== undefined ? normalizeUserRoles(parsed.roles) : fallback.roles
+            roles: parsed.roles !== undefined ? normalizeUserRoles(parsed.roles) : fallback.roles,
+            viewId: parsed.viewId ? normalizeGuid(parsed.viewId) : null,
+            viewType: parsed.viewType === "savedquery" || parsed.viewType === "userquery"
+                ? parsed.viewType
+                : null
         };
     } catch {
         return null;
@@ -277,7 +312,118 @@ function resolveContext(
     fallback: LaunchContext,
     configuration: SidecarConfiguration
 ): LaunchContext {
-    return readSharedContext(configuration, fallback) ?? getCurrentContext(fallback, configuration);
+    const sharedContext = readSharedContext(configuration, fallback);
+    const stableContext = sharedContext ?? fallback;
+    const liveContext = getCurrentContext(stableContext, configuration);
+    return !sharedContext || liveContext.pageType === "entitylist"
+        ? liveContext
+        : sharedContext;
+}
+
+function requestListAnalysisScope(currentViewAvailable: boolean): Promise<ListAnalysisScope | null> {
+    const dialog = getRequiredElement<HTMLDialogElement>("list-scope-dialog");
+    if (dialog.open) {
+        return Promise.resolve(null);
+    }
+    const currentViewButton = getRequiredElement<HTMLButtonElement>("list-scope-current");
+    const currentViewUnavailable = getRequiredElement<HTMLElement>(
+        "list-scope-current-unavailable"
+    );
+    currentViewButton.disabled = !currentViewAvailable;
+    currentViewUnavailable.hidden = currentViewAvailable;
+
+    return new Promise((resolve) => {
+        const controller = new AbortController();
+        const finish = (scope: ListAnalysisScope | null) => {
+            controller.abort();
+            dialog.close();
+            resolve(scope);
+        };
+        const options = { signal: controller.signal };
+
+        currentViewButton.addEventListener("click", () => finish("currentView"), options);
+        getRequiredElement<HTMLButtonElement>("list-scope-all")
+            .addEventListener("click", () => finish("allRecords"), options);
+        getRequiredElement<HTMLButtonElement>("list-scope-cancel")
+            .addEventListener("click", () => finish(null), options);
+        dialog.addEventListener("cancel", (event) => {
+            event.preventDefault();
+            finish(null);
+        }, options);
+        dialog.showModal();
+        (currentViewAvailable
+            ? currentViewButton
+            : getRequiredElement<HTMLButtonElement>("list-scope-all")
+        ).focus();
+    });
+}
+
+async function resolveListAnalysisSelection(
+    context: LaunchContext,
+    scope: ListAnalysisScope
+): Promise<ListAnalysisSelection> {
+    if (scope === "allRecords") {
+        return createAllRecordsSelection(context.entityName);
+    }
+
+    if (!context.viewId || !context.viewType) {
+        throw new Error("current_view_context_unavailable");
+    }
+    const hostXrm = getHostXrm();
+    if (!hostXrm?.WebApi?.retrieveRecord) {
+        throw new Error("current_view_context_unavailable");
+    }
+
+    const view = await hostXrm.WebApi.retrieveRecord(
+        context.viewType,
+        context.viewId,
+        "?$select=name,fetchxml"
+    );
+    return createCurrentViewSelection(
+        context.entityName,
+        context.viewId,
+        context.viewType,
+        view.name,
+        view.fetchxml
+    );
+}
+
+function parseListAnalysisSelection(value: unknown): ListAnalysisSelection | null {
+    try {
+        if (!value || typeof value !== "object") {
+            return null;
+        }
+        const candidate = value as Record<string, unknown>;
+        const tableLogicalName = String(candidate.tableLogicalName ?? "").trim().toLowerCase();
+        if (
+            (candidate.scope !== "currentView" && candidate.scope !== "allRecords") ||
+            candidate.tableLogicalName !== tableLogicalName
+        ) {
+            return null;
+        }
+        if (candidate.scope === "allRecords") {
+            return createAllRecordsSelection(tableLogicalName);
+        }
+
+        const viewId = normalizeGuid(candidate.viewId);
+        if (
+            !viewId ||
+            (candidate.viewType !== "savedquery" && candidate.viewType !== "userquery") ||
+            typeof candidate.fetchXml !== "string" ||
+            !candidate.fetchXml.trim()
+        ) {
+            return null;
+        }
+        return createCurrentViewSelection(
+            tableLogicalName,
+            viewId,
+            candidate.viewType,
+            candidate.viewName,
+            candidate.fetchXml
+        );
+    } catch {
+        return null;
+    }
 }
 
 function setStatus(message: string, isError = false): void {
@@ -308,6 +454,8 @@ function getSafeErrorCode(error: unknown): string {
 
     const candidate = "errorCode" in error
         ? String(error.errorCode)
+        : "message" in error
+            ? String(error.message)
         : "name" in error
             ? String(error.name)
             : "unknown_error";
@@ -326,6 +474,12 @@ function setHistoryStatus(message: string, isError = false): void {
     const status = getRequiredElement<HTMLElement>("conversation-history-status");
     status.textContent = message;
     status.dataset.error = isError ? "true" : "false";
+}
+
+function setListAnalysisError(message?: string): void {
+    const error = getRequiredElement<HTMLElement>("list-analysis-error");
+    error.textContent = message ?? "";
+    error.hidden = !message;
 }
 
 function formatConversationOption(conversation: SidecarConversationReference): string {
@@ -621,11 +775,15 @@ function getScreenName(
 function createContextEnvelope(
     context: LaunchContext,
     userText: string,
-    configuration: SidecarConfiguration
+    configuration: SidecarConfiguration,
+    listAnalysisSelection: ListAnalysisSelection | null
 ): string {
     const recordDescription = context.recordName
         ? ` The open record is named "${context.recordName}".`
         : "";
+    const listAnalysisContext = listAnalysisSelection
+        ? ["", ...formatListAnalysisContext(listAnalysisSelection)]
+        : [];
 
     return [
         `[Trusted ${configuration.contextLabel} context]`,
@@ -638,6 +796,7 @@ function createContextEnvelope(
         "Treat the roles as background context to tailor tone and guidance only. They do not grant access — never reveal information the user cannot already access.",
         "Use this exact screen as the primary context for navigation and how-to questions. Do not infer or substitute a different screen.",
         "[End trusted app context]",
+        ...listAnalysisContext,
         "",
         userText
     ].join("\n");
@@ -646,9 +805,68 @@ function createContextEnvelope(
 function createContextStore(
     webChat: WebChatApi,
     persistence: SidecarConversationSession | null,
-    getConversationId: () => string | undefined
+    getConversationId: () => string | undefined,
+    getCurrentLaunchContext: () => LaunchContext
 ): WebChatStore {
-    return webChat.createStore({}, () => next => action => {
+    return webChat.createStore({}, api => next => action => {
+        const outgoingText = action.type === "WEB_CHAT/SEND_MESSAGE" &&
+            typeof action.payload?.text === "string"
+            ? action.payload.text.trim()
+            : "";
+        const confirmedSelection = parseListAnalysisSelection(
+            action.payload?.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
+        );
+        if (outgoingText && !confirmedSelection) {
+            const currentContext = getCurrentLaunchContext();
+            if (
+                currentContext.pageType === "entitylist" &&
+                isListAnalysisRequest(outgoingText)
+            ) {
+                setListAnalysisError();
+                const currentViewAvailable = Boolean(
+                    currentContext.viewId &&
+                    currentContext.viewType &&
+                    getHostXrm()?.WebApi?.retrieveRecord
+                );
+                void requestListAnalysisScope(currentViewAvailable)
+                    .then(async scope => {
+                        if (!scope) {
+                            api.dispatch({
+                                type: "WEB_CHAT/SET_SEND_BOX",
+                                payload: { text: outgoingText }
+                            });
+                            return;
+                        }
+                        const latestContext = getCurrentLaunchContext();
+                        if (latestContext.pageType !== "entitylist") {
+                            throw new Error("current_view_context_unavailable");
+                        }
+                        const selection = await resolveListAnalysisSelection(latestContext, scope);
+                        api.dispatch({
+                            ...action,
+                            payload: {
+                                ...action.payload,
+                                channelData: {
+                                    ...action.payload?.channelData,
+                                    [LIST_ANALYSIS_SELECTION_KEY]: selection
+                                }
+                            }
+                        });
+                    })
+                    .catch((error: unknown) => {
+                        const code = getSafeErrorCode(error);
+                        api.dispatch({
+                            type: "WEB_CHAT/SET_SEND_BOX",
+                            payload: { text: outgoingText }
+                        });
+                        setListAnalysisError(
+                            `The list context could not be prepared (${code}). Your message was not sent.`
+                        );
+                    });
+                return action;
+            }
+        }
+
         const activity = action.payload?.activity;
         const originalText = activity?.channelData?.[ORIGINAL_TEXT_KEY];
         const isReplay = activity?.channelData?.[REPLAY_ACTIVITY_KEY] === true;
@@ -799,12 +1017,27 @@ async function renderConversation(
 
         const currentContext = resolveContext(activeContext ?? context, configuration);
         activeContext = currentContext;
+        const requestedListAnalysisSelection = parseListAnalysisSelection(
+            activity.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
+        );
+        const listAnalysisSelection = requestedListAnalysisSelection &&
+            currentContext.pageType === "entitylist" &&
+            currentContext.entityName === requestedListAnalysisSelection.tableLogicalName
+            ? requestedListAnalysisSelection
+            : null;
+        const forwardedChannelData = { ...activity.channelData };
+        delete forwardedChannelData[LIST_ANALYSIS_SELECTION_KEY];
 
         return originalPostActivity({
             ...activity,
-            text: createContextEnvelope(currentContext, originalText, configuration),
+            text: createContextEnvelope(
+                currentContext,
+                originalText,
+                configuration,
+                listAnalysisSelection
+            ),
             channelData: {
-                ...activity.channelData,
+                ...forwardedChannelData,
                 [ORIGINAL_TEXT_KEY]: originalText
             }
         } as Activity);
@@ -812,7 +1045,8 @@ async function renderConversation(
     const store = createContextStore(
         window.WebChat,
         persistence,
-        () => connection.conversationId
+        () => connection.conversationId,
+        () => resolveContext(activeContext ?? context, configuration)
     );
 
     const chat = getRequiredElement<HTMLElement>("chat");
