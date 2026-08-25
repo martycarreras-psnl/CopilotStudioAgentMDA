@@ -92,6 +92,25 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     assert.equal((html.match(/<!doctype html>/gi) ?? []).length, 1);
 });
 
+test("generated side pane uses iOS-style chat colors and rounded bubbles", async () => {
+    const source = await read(sourceRoot, "agentSidePane.ts");
+    const template = await read(sourceRoot, "agentSidePane.template.html");
+    const html = await read(sourceRoot, "agentSidePane.html");
+
+    for (const content of [source, html]) {
+        assert.match(content, /bubbleFromUserBackground:"#007aff"|bubbleFromUserBackground: "#007aff"/);
+        assert.match(content, /bubbleFromUserTextColor:"#ffffff"|bubbleFromUserTextColor: "#ffffff"/);
+        assert.match(content, /bubbleBackground:"#e9e9eb"|bubbleBackground: "#e9e9eb"/);
+        assert.match(content, /bubbleBorderRadius:18|bubbleBorderRadius: 18/);
+        assert.match(content, /bubbleFromUserBorderRadius:18|bubbleFromUserBorderRadius: 18/);
+        assert.match(content, /bubbleNubSize:0|bubbleNubSize: 0/);
+        assert.match(content, /sendBoxButtonColor:"#007aff"|sendBoxButtonColor: "#007aff"/);
+    }
+    assert.match(template, /border-radius: 15px/);
+    assert.match(template, /background: #f9f9fb/);
+    assert.doesNotMatch(source, /#deecf9|#0f6cbd/);
+});
+
 test("library icon is used by the persistent collapsed side pane", async () => {
     const launcher = await read(sourceRoot, "agentSidePane.js");
     const launcherSource = await read(sourceRoot, "agentSidePaneLauncher.ts");
