@@ -170,6 +170,9 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /getPrimaryAttributeValue/);
     assert.match(source, /formEntityName !== entityName \|\| formRecordId !== recordId/);
     assert.match(source, /connection\.postActivity = \(activity: Activity\)/);
+    assert.match(source, /createConnectorConsentTracker\(\)/);
+    assert.match(source, /connectorConsentTracker\.claim\(activity\)/);
+    assert.match(source, /if \(consentClaim\?\.duplicate\)/);
     assert.match(source, /recordName: currentRecordName \?\? \(isSameRecord \? fallback\.recordName : ""\)/);
     assert.match(source, /createContextEnvelope\(/);
     assert.match(source, /resolveContext\(activeContext, activeConfiguration\)/);

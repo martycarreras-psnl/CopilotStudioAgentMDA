@@ -11,7 +11,9 @@ import {
     type CopilotStudioWebChatConnection
 } from "@microsoft/agents-copilotstudio-client";
 import type { Activity } from "@microsoft/agents-activity";
+import { of, tap } from "rxjs";
 import { sidecarConfigurationRepository } from "./hrSidecarBootstrap";
+import { createConnectorConsentTracker } from "./sidecarConnectorConsent";
 import {
     getEntityBinding,
     normalizeGuid,
@@ -1007,12 +1009,33 @@ async function renderConversation(
         persistence.restore(resumeConversation, persistedActivities);
     }
     const originalPostActivity = connection.postActivity.bind(connection);
+    const connectorConsentTracker = createConnectorConsentTracker();
     connection.postActivity = (activity: Activity) => {
+        const consentClaim = connectorConsentTracker.claim(activity);
+        if (consentClaim?.duplicate) {
+            return of(String(activity.id ?? crypto.randomUUID()));
+        }
+
+        const postActivity = (forwardedActivity: Activity) => {
+            try {
+                const result = originalPostActivity(forwardedActivity);
+                return consentClaim
+                    ? result.pipe(tap({
+                        error: () => connectorConsentTracker.release(consentClaim.key)
+                    }))
+                    : result;
+            } catch (error) {
+                if (consentClaim) {
+                    connectorConsentTracker.release(consentClaim.key);
+                }
+                throw error;
+            }
+        };
         const originalText = activity.type === "message"
             ? activity.text?.trim()
             : undefined;
         if (!originalText) {
-            return originalPostActivity(activity);
+            return postActivity(activity);
         }
 
         const currentContext = resolveContext(activeContext ?? context, configuration);
@@ -1028,7 +1051,7 @@ async function renderConversation(
         const forwardedChannelData = { ...activity.channelData };
         delete forwardedChannelData[LIST_ANALYSIS_SELECTION_KEY];
 
-        return originalPostActivity({
+        return postActivity({
             ...activity,
             text: createContextEnvelope(
                 currentContext,
