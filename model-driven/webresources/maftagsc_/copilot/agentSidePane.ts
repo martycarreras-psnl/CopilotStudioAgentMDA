@@ -502,6 +502,20 @@ function getSafeErrorCode(error: unknown): string {
     return /^[a-z0-9_.-]{1,80}$/i.test(candidate) ? candidate : "unknown_error";
 }
 
+const INTERACTIVE_SIGN_IN_ERROR_CODES = new Set([
+    "consent_required",
+    "interaction_required",
+    "login_required",
+    "monitor_window_timeout",
+    "silent_sso_error",
+    "timed_out"
+]);
+
+function shouldOfferInteractiveSignIn(error: unknown): boolean {
+    return error instanceof InteractionRequiredAuthError
+        || INTERACTIVE_SIGN_IN_ERROR_CODES.has(getSafeErrorCode(error));
+}
+
 function showError(error: unknown): void {
     const code = getSafeErrorCode(error);
     setStatus(
@@ -799,7 +813,7 @@ async function acquireToken(
             closeInteractiveSignInWindow(popup);
             return result.accessToken;
         } catch (error) {
-            if (!interactive && error instanceof InteractionRequiredAuthError) {
+            if (!interactive && shouldOfferInteractiveSignIn(error)) {
                 return null;
             }
             if (!interactive) {

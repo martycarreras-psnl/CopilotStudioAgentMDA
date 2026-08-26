@@ -198,6 +198,8 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /popup\.location\.replace\(/);
     assert.match(source, /void start\(true, popup \?\? undefined\)/);
     assert.match(source, /Allow pop-ups for this site and try again/);
+    assert.match(source, /INTERACTIVE_SIGN_IN_ERROR_CODES[\s\S]*"timed_out"/);
+    assert.match(source, /!interactive && shouldOfferInteractiveSignIn\(error\)/);
     assert.match(source, /window\.localStorage\.removeItem\(requestKey\)/);
     assert.match(source, /resolveSidecarConfiguration\(\s*configuration\.configurationId,/);
     assert.match(source, /sidecar_form_not_bound/);
