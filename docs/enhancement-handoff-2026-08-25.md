@@ -1,9 +1,10 @@
 # Agent Sidecar Enhancement Handoff
 
 **Prepared:** August 25, 2026  
+**Updated:** August 26, 2026
 **Repository:** `martycarreras-psnl/CopilotStudioAgentMDA`  
 **Branch:** `main`  
-**Latest pushed commit:** `19a310e chore(solution): package list analysis scoping`
+**Latest pushed commit:** `0d4512b fix(sidecar): deduplicate connector consent submissions`
 
 ## Purpose
 
@@ -25,6 +26,8 @@ Agent Sidecar is a reusable model-driven app side pane that:
 - Hides greeting-only sessions from Recent conversations until the user sends a message.
 - Uses an iPhone Messages-inspired chat treatment with blue outgoing bubbles.
 - Conditionally supports list analysis with explicit Current view or All accessible records scope.
+- Suppresses repeated submissions of the same connector-consent decision so stale
+  adaptive-card responses do not create additional agent turns.
 
 The runtime and solution package are deployed to the Sales CS environment described below.
 
@@ -42,6 +45,7 @@ The runtime and solution package are deployed to the Sales CS environment descri
 | Sales Hub app ID | `3d77919b-a319-f111-8341-6045bd07e2cb` |
 | Agent name | `Insights and actions` |
 | Agent schema name | `cr88d_insightsandactions_AChDbK` |
+| Agent bot ID | `e577aac1-522f-4c5c-959c-fd3cfa568fa7` |
 | SPA client ID | `51733b88-b854-441d-a253-57156285344d` |
 | Redirect web resource | `maftagsc_/copilot/authRedirect.html` |
 
@@ -73,6 +77,36 @@ Do not deploy an unpushed local state.
 | `cb160af`, `b357870` | Removed the redundant context event that caused false agent responses. |
 | `6784cbf`, `92d6cf6` | Added the Messages-inspired visual design. |
 | `ccb00e8`, `19a310e` | Added, packaged, deployed, and live-tested scoped list analysis. |
+| `0d4512b` | Deduplicated repeated connector-consent submissions and deployed the updated Core runtime. |
+
+## Connector consent: completed investigation
+
+The latest consent investigation identified two different behaviors that must
+remain distinct:
+
+1. **Repeated submission of one consent request.** The browser submitted the
+   same `connector_consent` decision more than once with the same
+   `_dracarys_request_id`. Copilot Studio treated each blank postback as another
+   turn and generated the unwanted “didn't come through” responses.
+2. **Separate approvals for separate MCP writes.** Dataverse MCP operations such
+   as `upsert_skill` and `create_skill_resource` produce distinct consent request
+   IDs. Those are independent server-generated approvals, not duplicate client
+   submissions.
+
+Commit `0d4512b` added a conversation-local consent tracker. The runtime forwards
+the first decision for a request ID and decision, completes repeat submissions
+locally, allows distinct requests and decisions, and permits retry after a failed
+initial post. The fix was packaged, imported, published, and byte-verified in
+`carrema Sales CS`.
+
+The Microsoft 365 Agents SDK Web Chat adapter is an activity transport. It does
+not provide the connection, token-exchange, or consent brokerage supplied by the
+first-party Microsoft 365 Copilot host. Microsoft exposes an agent-level
+`AdminConsentBypass` control through the Power Platform API, but adding that
+administrative bypass to the Agent Sidecar app was explicitly considered and
+then dropped. **Do not add an automatic Allow behavior, an admin-bypass button,
+or elevated admin permissions to the runtime SPA unless the user explicitly
+reopens that scope.**
 
 ## Scoped list analysis: completed behavior
 
@@ -119,6 +153,7 @@ Once a bound form has initialized the pane, in-app navigation to a list preserve
 | `model-driven/webresources/maftagsc_/copilot/agentSidePane.ts` | Main runtime: auth, Web Chat, context, list scoping, conversation persistence, replay, resume, and delete. |
 | `model-driven/webresources/maftagsc_/copilot/agentSidePaneLauncher.ts` | Form OnLoad entry point; resolves one app configuration, writes local context, and creates/reuses the pane. |
 | `model-driven/webresources/maftagsc_/copilot/sidecarListAnalysis.ts` | Pure list-intent detection, scope normalization, sanitization, and prompt formatting. |
+| `model-driven/webresources/maftagsc_/copilot/sidecarConnectorConsent.ts` | Pure request-and-decision tracker that suppresses repeated connector-consent submissions within one conversation. |
 | `model-driven/webresources/maftagsc_/copilot/sidecarConfiguration.ts` | Configuration contract and fail-closed app resolution. |
 | `model-driven/webresources/maftagsc_/copilot/sidecarConfigurationRepository.ts` | Dataverse and bootstrap configuration lookup. |
 | `model-driven/webresources/maftagsc_/copilot/sidecarConversationRepository.ts` | User-owned conversation and activity persistence. |
@@ -126,6 +161,7 @@ Once a bound form has initialized the pane, in-app navigation to a list preserve
 | `src/services/real-sidecar-admin-provider.ts` | Live administration lifecycle, duplicate checks, binding solution creation, and form mutation. |
 | `src/services/mock-sidecar-admin-provider.ts` | Mock administration behavior used by tests and prototype flows. |
 | `tests/model-driven/sidecar-list-analysis.test.ts` | Focused intent and scope-safety tests. |
+| `tests/model-driven/sidecar-connector-consent.test.ts` | Focused first-submit, duplicate, distinct-request, and retry tests. |
 | `model-driven/build.test.mjs` | Generated runtime, projection, and package regression tests. |
 | `solution-core/AgentSidecarCore.zip` | Current importable solution package. |
 
@@ -270,7 +306,9 @@ npm run build:model-driven
 npm run test:model-driven
 ```
 
-Do not install new test or build tooling. The last completed baseline had 58 Vitest tests passing, including 18 focused list-analysis tests, plus 9 model-driven package tests.
+Do not install new test or build tooling. The latest connector-consent validation
+had 47 model-driven Vitest tests and 9 model-driven package tests passing, with
+model-driven TypeScript typechecking also passing.
 
 ## Deployment and live-test checklist
 
@@ -291,11 +329,36 @@ After the multi-sidecar change is committed and pushed:
 
 - Branch: `main`
 - Remote: `https://github.com/martycarreras-psnl/CopilotStudioAgentMDA`
-- Latest pushed commit: `19a310e`
-- No tracked source changes were pending when this document was started.
+- Latest pushed commit before this handoff refresh: `0d4512b`
+- The branch matched `origin/main` before this handoff refresh.
 - `.playwright-mcp/` is an unrelated untracked browser artifact. Do not stage or delete it as part of sidecar work.
 - All previously tracked enhancement todos were complete.
 
 ## Suggested opening prompt for the next session
 
-> Read `docs/enhancement-handoff-2026-08-25.md`, `README.md`, `CONTEXT.md`, and the repository instructions. Continue the Agent Sidecar enhancement effort. Start by clarifying whether multiple sidecars means multiple independently configured panes in the same model-driven app. Use the one-question-at-a-time grilling cadence, recommend the independent per-configuration pane model, and do not implement until that product boundary is resolved.
+> Continue the Agent Sidecar enhancement effort in
+> `martycarreras-psnl/CopilotStudioAgentMDA` on `main`. First read
+> `docs/enhancement-handoff-2026-08-25.md`, `README.md`, `CONTEXT.md`,
+> `AGENTS.md`, and the path-specific repository instructions. Confirm the
+> current repository state before changing anything and preserve the rule that
+> every change must be committed and pushed before deployment.
+>
+> The deployed baseline includes navigation-local context, durable/deletable
+> conversation history, greeting-only filtering, Messages-inspired styling,
+> conditional list-view analysis, and same-request connector-consent
+> deduplication. Do not reintroduce navigation-triggered agent activities. Do
+> not auto-approve distinct MCP write consent requests or add the abandoned
+> `AdminConsentBypass` administration feature unless I explicitly reopen that
+> scope.
+>
+> The next likely enhancement is multiple sidecars. Use the repository's
+> one-question-at-a-time grilling cadence and begin by resolving whether I want
+> multiple independently configured panes in the same model-driven app or
+> easier management of one sidecar across several apps. Recommend independent
+> per-configuration pane identity, conversation isolation, and app ID as a
+> non-unique grouping key. Read the existing implementation before asking
+> anything the code already answers. Do not start schema or runtime changes
+> until the multiplicity boundary and visibility model are explicit. Once
+> scope is stable, implement end to end, add focused tests, regenerate and
+> package maintained projections, commit and push, then deploy only the pushed
+> package and verify it in `carrema Sales CS`.
