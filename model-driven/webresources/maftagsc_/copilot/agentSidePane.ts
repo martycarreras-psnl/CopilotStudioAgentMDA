@@ -916,12 +916,12 @@ function createContextStore(
             ? resolveOutgoingContext(getCurrentLaunchContext)
             : null;
         if (outgoingContext && !outgoingContext.ok) {
-            window.queueMicrotask(() => {
+            window.setTimeout(() => {
                 api.dispatch({
                     type: "WEB_CHAT/SET_SEND_BOX",
                     payload: { text: outgoingText }
                 });
-            });
+            }, 0);
             setListAnalysisError(outgoingContext.message);
             return action;
         }

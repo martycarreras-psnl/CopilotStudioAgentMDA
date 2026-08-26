@@ -202,7 +202,10 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /!interactive && shouldOfferInteractiveSignIn\(error\)/);
     assert.match(source, /window\.localStorage\.removeItem\(requestKey\)/);
     assert.match(source, /resolveOutgoingContext\(getCurrentLaunchContext\)/);
-    assert.match(source, /window\.queueMicrotask\(\(\) =>/);
+    assert.match(
+        source,
+        /window\.setTimeout\(\(\) => \{\s*api\.dispatch\(\{\s*type: "WEB_CHAT\/SET_SEND_BOX"/
+    );
     assert.match(source, /WEB_CHAT\/SET_SEND_BOX/);
     assert.match(source, /resolveSidecarConfiguration\(\s*configuration\.configurationId,/);
     assert.match(source, /sidecar_form_not_bound/);
