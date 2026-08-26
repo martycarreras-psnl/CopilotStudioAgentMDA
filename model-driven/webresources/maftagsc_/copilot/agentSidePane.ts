@@ -916,9 +916,11 @@ function createContextStore(
             ? resolveOutgoingContext(getCurrentLaunchContext)
             : null;
         if (outgoingContext && !outgoingContext.ok) {
-            api.dispatch({
-                type: "WEB_CHAT/SET_SEND_BOX",
-                payload: { text: outgoingText }
+            window.queueMicrotask(() => {
+                api.dispatch({
+                    type: "WEB_CHAT/SET_SEND_BOX",
+                    payload: { text: outgoingText }
+                });
             });
             setListAnalysisError(outgoingContext.message);
             return action;
