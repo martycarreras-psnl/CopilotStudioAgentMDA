@@ -511,6 +511,7 @@ const INTERACTIVE_SIGN_IN_ERROR_CODES = new Set([
     "silent_sso_error",
     "timed_out"
 ]);
+const SEND_BOX_RESTORE_DELAY_MS = 120;
 
 function shouldOfferInteractiveSignIn(error: unknown): boolean {
     return error instanceof InteractionRequiredAuthError
@@ -921,7 +922,7 @@ function createContextStore(
                     type: "WEB_CHAT/SET_SEND_BOX",
                     payload: { text: outgoingText }
                 });
-            }, 0);
+            }, SEND_BOX_RESTORE_DELAY_MS);
             setListAnalysisError(outgoingContext.message);
             return action;
         }

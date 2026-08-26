@@ -206,6 +206,7 @@ test("live page context replaces stale record details before each message", asyn
         source,
         /window\.setTimeout\(\(\) => \{\s*api\.dispatch\(\{\s*type: "WEB_CHAT\/SET_SEND_BOX"/
     );
+    assert.match(source, /}, SEND_BOX_RESTORE_DELAY_MS\)/);
     assert.match(source, /WEB_CHAT\/SET_SEND_BOX/);
     assert.match(source, /resolveSidecarConfiguration\(\s*configuration\.configurationId,/);
     assert.match(source, /sidecar_form_not_bound/);
