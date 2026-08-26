@@ -120,7 +120,7 @@ test("generated side pane uses iOS-style chat colors and rounded bubbles", async
     assert.doesNotMatch(source, /#deecf9|#0f6cbd/);
 });
 
-test("library icon is used by the persistent collapsed side pane", async () => {
+test("branded icon is used by the persistent collapsed side pane", async () => {
     const launcher = await read(sourceRoot, "agentSidePane.js");
     const launcherSource = await read(sourceRoot, "agentSidePaneLauncher.ts");
     const icon = await read(sourceRoot, "agentGuideLibrary.svg");
@@ -139,8 +139,9 @@ test("library icon is used by the persistent collapsed side pane", async () => {
     assert.match(launcherSource, /window\.HRAgentSidecar\.initializeGuide = initialize/);
     assert.doesNotMatch(launcher, /pane\.select\(\)|HRAgentSidecar\.openGuide/);
     assert.match(icon, /viewBox="0 0 24 24"/);
-    assert.match(icon, /currentColor/);
-    assert.doesNotMatch(icon, /<script|#[0-9a-f]{3,8}/i);
+    assert.match(icon, /<circle[^>]+fill="#6655D0"/);
+    assert.match(icon, /stroke="#FFFFFF"/);
+    assert.doesNotMatch(icon, /<script/i);
 });
 
 test("all HR Management main forms register the collapsed guide on load", async () => {
@@ -276,6 +277,15 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.deepEqual(
         packagedRuntime,
         await readFile(new URL("agentSidePane.html", sourceRoot))
+    );
+
+    const packagedIcon = [...entries.entries()].find(([name]) =>
+        name.startsWith("WebResources/maftagsc_copilotagentGuideLibrarysvg")
+    )?.[1];
+    assert.ok(packagedIcon, "Packaged side-pane icon is missing");
+    assert.deepEqual(
+        packagedIcon,
+        await readFile(new URL("agentGuideLibrary.svg", sourceRoot))
     );
 });
 
