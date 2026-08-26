@@ -42,6 +42,7 @@ import {
     type ListAnalysisScope,
     type ListAnalysisSelection
 } from "./sidecarListAnalysis";
+import { resolveOutgoingContext } from "./sidecarOutgoingContext";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
 const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
@@ -911,8 +912,22 @@ function createContextStore(
         const confirmedSelection = parseListAnalysisSelection(
             action.payload?.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
         );
-        if (outgoingText && !confirmedSelection) {
-            const currentContext = getCurrentLaunchContext();
+        const outgoingContext = outgoingText
+            ? resolveOutgoingContext(getCurrentLaunchContext)
+            : null;
+        if (outgoingContext && !outgoingContext.ok) {
+            api.dispatch({
+                type: "WEB_CHAT/SET_SEND_BOX",
+                payload: { text: outgoingText }
+            });
+            setListAnalysisError(outgoingContext.message);
+            return action;
+        }
+        if (outgoingContext?.ok) {
+            setListAnalysisError();
+        }
+        if (outgoingContext?.ok && !confirmedSelection) {
+            const currentContext = outgoingContext.context;
             if (
                 currentContext.pageType === "entitylist" &&
                 isListAnalysisRequest(outgoingText)

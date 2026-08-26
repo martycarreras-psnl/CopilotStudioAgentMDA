@@ -5,7 +5,7 @@ const TABLE_LOGICAL_NAME_PATTERN = /^[a-z][a-z0-9_]{0,127}$/;
 const LIST_OPERATION_PATTERN =
     /\b(analys(?:e|is|ing)|analyz(?:e|ing)|summari[sz](?:e|ing)|process(?:ing)?|review|compare|count|total|average|group|categor(?:ize|ise)|find|identify|check|validate|update|change|assign|delete|remove|create|send|email|export|calculate)\b/i;
 const LIST_TARGET_PATTERN =
-    /\b(these|those|them|visible|selected|rows|records|items|results|list|view)\b|\b(?:all|each|every)\s+(?:the\s+)?(?:rows|records|items|results)\b/i;
+    /\b(these|those|them|visible|selected|rows|records|items|results|list|view)\b|\b(?:all|each|every)\s+(?:the\s+)?(?:rows|records|items|results)\b|\b(?:this|the)\s+(?:info(?:rmation)?|data)\b/i;
 const INSTRUCTIONAL_PATTERN =
     /^\s*(how (?:do|can|would|should|to)|can i|should i|where|why|what does|what(?:'s| is) the (?:best )?way)\b/i;
 

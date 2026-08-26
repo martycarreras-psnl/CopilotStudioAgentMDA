@@ -14,7 +14,8 @@ describe("sidecar list analysis", () => {
         "Summarize all rows in this view",
         "Find duplicates in this list",
         "Calculate the average for these results",
-        "Update each selected record"
+        "Update each selected record",
+        "Please create an interactive HTML from this info."
     ])("detects a record-processing request: %s", (text) => {
         expect(isListAnalysisRequest(text)).toBe(true);
     });
