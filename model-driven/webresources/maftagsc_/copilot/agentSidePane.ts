@@ -113,8 +113,14 @@ interface HostXrm {
     };
     App?: {
         sidePanes?: {
+            state: number;
             getPane(paneId: string): {
+                paneId: string;
+                enabled: boolean;
                 hidden: boolean;
+            } | undefined;
+            getSelectedPane(): {
+                paneId: string;
             } | undefined;
         };
     };
@@ -630,11 +636,19 @@ function syncPaneVisibility(): void {
         return;
     }
     const hostXrm = getHostXrm();
-    const pane = hostXrm?.App?.sidePanes?.getPane(paneConfiguration.paneId);
+    const sidePanes = hostXrm?.App?.sidePanes;
+    const pane = sidePanes?.getPane(paneConfiguration.paneId);
     const isBound = isCurrentPageBound(paneConfiguration);
-    const shouldHide = isBound === false;
-    if (pane && isBound !== null && Boolean(pane.hidden) !== shouldHide) {
-        pane.hidden = shouldHide;
+    if (pane && isBound !== null && pane.enabled !== isBound) {
+        pane.enabled = isBound;
+    }
+    if (
+        pane &&
+        isBound === false &&
+        sidePanes?.getSelectedPane()?.paneId === pane.paneId &&
+        sidePanes.state !== 0
+    ) {
+        sidePanes.state = 0;
     }
     if (isBound && activeConfiguration && activeContext) {
         try {

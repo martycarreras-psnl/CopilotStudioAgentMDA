@@ -62,6 +62,7 @@ interface GlobalContext {
 }
 
 interface SidePane {
+    enabled: boolean;
     hidden: boolean;
     navigate(input: Record<string, unknown>): Promise<void>;
 }
@@ -237,7 +238,10 @@ async function initialize(executionContext: ExecutionContext): Promise<void> {
             const isBound = isFormBound(configuration, entityName, context.formId);
             const existingPane = Xrm.App.sidePanes.getPane(configuration.paneId);
             if (existingPane) {
-                existingPane.hidden = !isBound;
+                existingPane.enabled = isBound;
+                if (isBound) {
+                    existingPane.hidden = false;
+                }
             }
             if (isBound) {
                 try {

@@ -132,6 +132,8 @@ test("branded icon is used by the persistent collapsed side pane", async () => {
     assert.match(launcherSource, /canClose: false/);
     assert.match(launcherSource, /isSelected: false/);
     assert.match(launcherSource, /alwaysRender: true/);
+    assert.match(launcherSource, /existingPane\.enabled = isBound/);
+    assert.match(launcherSource, /if \(isBound\) \{\s*existingPane\.hidden = false/);
     assert.match(launcherSource, /sidecarConfigurationRepository\.listByAppId/);
     assert.match(launcherSource, /isFormBound\(configuration, entityName, context\.formId\)/);
     assert.match(launcherSource, /configurationId: configuration\.configurationId/);
@@ -222,8 +224,9 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /getConversationContextMismatch/);
     assert.match(source, /acknowledgedConversationContextKey/);
     assert.match(source, /PANE_VISIBILITY_SYNC_INTERVAL_MS/);
-    assert.match(source, /Boolean\(pane\.hidden\) !== shouldHide/);
-    assert.match(source, /pane\.hidden = shouldHide/);
+    assert.match(source, /pane\.enabled !== isBound/);
+    assert.match(source, /pane\.enabled = isBound/);
+    assert.match(source, /sidePanes\.state = 0/);
     assert.match(source, /utility\.getPageContext\(\)\.input/);
     assert.match(source, /pageType === "entitylist"/);
     assert.match(source, /VALIDATED_CONTEXT_KEY/);
@@ -301,6 +304,15 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.deepEqual(
         packagedRuntime,
         await readFile(new URL("agentSidePane.html", sourceRoot))
+    );
+
+    const packagedLauncher = [...entries.entries()].find(([name]) =>
+        name.startsWith("WebResources/maftagsc_copilotagentSidePanejs")
+    )?.[1];
+    assert.ok(packagedLauncher, "Packaged side-pane launcher is missing");
+    assert.deepEqual(
+        packagedLauncher,
+        await readFile(new URL("agentSidePane.js", sourceRoot))
     );
 
     const packagedIcon = [...entries.entries()].find(([name]) =>
