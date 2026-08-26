@@ -597,11 +597,11 @@ function refreshConversationContextWarning(context: LaunchContext): void {
 function isCurrentPageBound(configuration: SidecarConfiguration): boolean | null {
     try {
         const hostXrm = getHostXrm();
-        const getPageContext = hostXrm?.Utility?.getPageContext;
-        if (!getPageContext) {
+        const utility = hostXrm?.Utility;
+        if (!utility?.getPageContext) {
             return null;
         }
-        const input = getPageContext().input;
+        const input = utility.getPageContext().input;
         const pageType =
             input?.pageType === "entityrecord" || input?.pageType === "entitylist"
                 ? input.pageType

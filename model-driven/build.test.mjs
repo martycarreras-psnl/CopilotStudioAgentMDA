@@ -224,6 +224,7 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /PANE_VISIBILITY_SYNC_INTERVAL_MS/);
     assert.match(source, /Boolean\(pane\.hidden\) !== shouldHide/);
     assert.match(source, /pane\.hidden = shouldHide/);
+    assert.match(source, /utility\.getPageContext\(\)\.input/);
     assert.match(source, /pageType === "entitylist"/);
     assert.match(source, /VALIDATED_CONTEXT_KEY/);
     assert.match(source, /persistence\?\.lockOrigin/);
