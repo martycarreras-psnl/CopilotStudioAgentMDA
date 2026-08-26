@@ -632,8 +632,9 @@ function syncPaneVisibility(): void {
     const hostXrm = getHostXrm();
     const pane = hostXrm?.App?.sidePanes?.getPane(paneConfiguration.paneId);
     const isBound = isCurrentPageBound(paneConfiguration);
-    if (pane && isBound !== null && pane.hidden === isBound) {
-        pane.hidden = !isBound;
+    const shouldHide = isBound === false;
+    if (pane && isBound !== null && Boolean(pane.hidden) !== shouldHide) {
+        pane.hidden = shouldHide;
     }
     if (isBound && activeConfiguration && activeContext) {
         try {
