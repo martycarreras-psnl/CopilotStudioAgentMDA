@@ -194,6 +194,10 @@ test("live page context replaces stale record details before each message", asyn
     assert.doesNotMatch(source, /WEB_CHAT\/SEND_EVENT/);
     assert.match(source, /await resolveSidecarConfiguration\(\s*configurationId,\s*appId,\s*paneId,/);
     assert.match(source, /maftagsc\.sidecar\.authRequest\.\$\{authNamespace\}/);
+    assert.match(source, /window\.open\(\s*"about:blank"/);
+    assert.match(source, /popup\.location\.replace\(/);
+    assert.match(source, /void start\(true, popup \?\? undefined\)/);
+    assert.match(source, /Allow pop-ups for this site and try again/);
     assert.match(source, /window\.localStorage\.removeItem\(requestKey\)/);
     assert.match(source, /resolveSidecarConfiguration\(\s*configuration\.configurationId,/);
     assert.match(source, /sidecar_form_not_bound/);

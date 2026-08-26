@@ -504,7 +504,12 @@ function getSafeErrorCode(error: unknown): string {
 
 function showError(error: unknown): void {
     const code = getSafeErrorCode(error);
-    setStatus(`The guide couldn't start (${code}). Try again or contact an administrator.`, true);
+    setStatus(
+        code === "popup_blocked"
+            ? "The sign-in window was blocked. Allow pop-ups for this site and try again."
+            : `The guide couldn't start (${code}). Try again or contact an administrator.`,
+        true
+    );
     const retry = getRequiredElement<HTMLButtonElement>("sign-in");
     retry.textContent = "Try again";
     retry.hidden = false;
@@ -685,7 +690,42 @@ function getCachedAccount(client: PublicClientApplication): AccountInfo | undefi
  * same-origin localStorage, which COOP and storage partitioning do not break for
  * a first-party context.
  */
-async function runInteractiveSignIn(configuration: SidecarConfiguration): Promise<void> {
+function openInteractiveSignInWindow(): Window | null {
+    const popup = window.open(
+        "about:blank",
+        `maftagsc-sidecar-auth-pending-${crypto.randomUUID()}`,
+        "width=520,height=680"
+    );
+    if (popup) {
+        try {
+            popup.document.title = "Agent Sidecar sign-in";
+            if (popup.document.body) {
+                popup.document.body.textContent = "Preparing sign-in…";
+            }
+        } catch {
+            /* navigation still proceeds if the browser restricts the blank window */
+        }
+    }
+    return popup;
+}
+
+function closeInteractiveSignInWindow(popup?: Window): void {
+    if (!popup) {
+        return;
+    }
+    try {
+        if (!popup.closed) {
+            popup.close();
+        }
+    } catch {
+        /* the Entra redirect can sever the popup handle before it closes itself */
+    }
+}
+
+async function runInteractiveSignIn(
+    configuration: SidecarConfiguration,
+    popup: Window
+): Promise<void> {
     if (!configuration.configurationId) {
         throw new Error("sidecar_configuration_id_invalid");
     }
@@ -704,14 +744,9 @@ async function runInteractiveSignIn(configuration: SidecarConfiguration): Promis
     }));
     window.localStorage.removeItem(resultKey);
 
-    const popup = window.open(
-        `${redirectUri}?sidecarAuth=start&configurationId=${encodeURIComponent(configuration.configurationId)}&nonce=${encodeURIComponent(nonce)}`,
-        `maftagsc-sidecar-auth-${configuration.configurationId}-${nonce}`,
-        "width=520,height=680"
+    popup.location.replace(
+        `${redirectUri}?sidecarAuth=start&configurationId=${encodeURIComponent(configuration.configurationId)}&nonce=${encodeURIComponent(nonce)}`
     );
-    if (!popup) {
-        throw new Error("The sign-in window was blocked. Allow pop-ups for this site and try again.");
-    }
 
     try {
         await new Promise<void>((resolve, reject) => {
@@ -742,19 +777,14 @@ async function runInteractiveSignIn(configuration: SidecarConfiguration): Promis
     } finally {
         window.localStorage.removeItem(requestKey);
         window.localStorage.removeItem(resultKey);
-        try {
-            if (!popup.closed) {
-                popup.close();
-            }
-        } catch {
-            /* handle may be severed by COOP; the popup closes itself on success */
-        }
+        closeInteractiveSignInWindow(popup);
     }
 }
 
 async function acquireToken(
     interactive: boolean,
-    configuration: SidecarConfiguration
+    configuration: SidecarConfiguration,
+    popup?: Window
 ): Promise<string | null> {
     const client = await initializeMsal(configuration);
     const account = getCachedAccount(client);
@@ -766,6 +796,7 @@ async function acquireToken(
                 scopes: [configuration.scope],
                 account
             });
+            closeInteractiveSignInWindow(popup);
             return result.accessToken;
         } catch (error) {
             if (!interactive && error instanceof InteractionRequiredAuthError) {
@@ -779,7 +810,10 @@ async function acquireToken(
         return null;
     }
 
-    await runInteractiveSignIn(configuration);
+    if (!popup) {
+        throw new Error("popup_blocked");
+    }
+    await runInteractiveSignIn(configuration, popup);
 
     // The popup completed the authorization-code exchange in its own MSAL
     // instance that shares this origin's localStorage. This instance may not
@@ -1348,8 +1382,9 @@ async function deleteSelectedConversation(): Promise<void> {
     }
 }
 
-async function start(interactive: boolean): Promise<void> {
+async function start(interactive: boolean, popup?: Window): Promise<void> {
     if (startInProgress) {
+        closeInteractiveSignInWindow(popup);
         return;
     }
 
@@ -1361,7 +1396,7 @@ async function start(interactive: boolean): Promise<void> {
     try {
         const { configuration, context } = await parseLaunchRequest();
         applyPaneTitle(configuration.paneTitle);
-        const token = await acquireToken(interactive, configuration);
+        const token = await acquireToken(interactive, configuration, popup);
         if (!token) {
             showSignIn();
             return;
@@ -1372,13 +1407,18 @@ async function start(interactive: boolean): Promise<void> {
         // Never expose token, account, response, or HR context details in the UI or browser logs.
         showError(error);
     } finally {
+        closeInteractiveSignInWindow(popup);
         startInProgress = false;
     }
 }
 
 function initialize(): void {
     getRequiredElement<HTMLButtonElement>("sign-in").addEventListener("click", () => {
-        void start(true);
+        if (startInProgress) {
+            return;
+        }
+        const popup = openInteractiveSignInWindow();
+        void start(true, popup ?? undefined);
     });
     getRequiredElement<HTMLButtonElement>("new-conversation").addEventListener("click", () => {
         void startNewConversation();
