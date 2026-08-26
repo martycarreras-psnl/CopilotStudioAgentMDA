@@ -142,9 +142,7 @@
         { "label": "Drift Detected", "value": 703600002, "state": "Active" },
         { "label": "Disabled", "value": 703600003, "state": "Inactive" }
       ],
-      "alternateKeys": [
-        { "schemaName": "maftagsc_sidecarconfiguration_appid_key", "columns": ["maftagsc_appid"] }
-      ]
+      "alternateKeys": []
     },
     {
       "schemaName": "maftagsc_targetbinding",

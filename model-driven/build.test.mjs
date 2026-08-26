@@ -61,15 +61,15 @@ test("generated side pane uses the registered scope and dedicated popup redirect
     assert.match(html, /agenticruntime/);
     assert.doesNotMatch(html, /api\.powerplatform\.com\/CopilotStudio\.Invoke/);
     assert.match(html, /\/WebResources\/maftagsc_\/copilot\/authRedirect\.html/);
-    assert.match(html, /cr0b1_HRMgmtClassic/);
+    assert.match(html, /maftagsc_sidecarconfiguration/);
     assert.doesNotMatch(html, /Default_HR_Management_App_Guide_9e5461/);
     assert.doesNotMatch(html, /pvaSetContext/);
-    assert.match(html, /HR Management app/);
+    assert.match(html, /Model-driven App record form/);
     assert.match(html, /\[Trusted/);
     assert.match(html, /App ID:/);
     assert.match(html, /Record ID:/);
     assert.match(html, /signed-in user holds these roles/);
-    assert.match(html, /Benefit Plan record form/);
+    assert.match(html, /maftagsc_targetbinding/);
     assert.match(html, /Segoe UI Web \(West European\)/);
     assert.match(html, /primaryFont/);
     assert.match(html, /getPageContext/);
@@ -130,7 +130,11 @@ test("library icon is used by the persistent collapsed side pane", async () => {
     assert.match(launcherSource, /canClose: false/);
     assert.match(launcherSource, /isSelected: false/);
     assert.match(launcherSource, /alwaysRender: true/);
-    assert.match(launcherSource, /sidecarConfigurationRepository\.getByAppId/);
+    assert.match(launcherSource, /sidecarConfigurationRepository\.listByAppId/);
+    assert.match(launcherSource, /isFormBound\(configuration, entityName, context\.formId\)/);
+    assert.match(launcherSource, /configurationId: configuration\.configurationId/);
+    assert.match(launcherSource, /writeSharedContext\(configuration\.paneId, context\)/);
+    assert.match(launcherSource, /for \(const configuration of configurations\)/);
     assert.match(launcherSource, /window\.AgentSidecar\.initializeGuide = initialize/);
     assert.match(launcherSource, /window\.HRAgentSidecar\.initializeGuide = initialize/);
     assert.doesNotMatch(launcher, /pane\.select\(\)|HRAgentSidecar\.openGuide/);
@@ -187,7 +191,11 @@ test("live page context replaces stale record details before each message", asyn
     assert.doesNotMatch(source, /startNavigationWatcher/);
     assert.doesNotMatch(source, /pvaSetContext/);
     assert.doesNotMatch(source, /WEB_CHAT\/SEND_EVENT/);
-    assert.match(source, /await sidecarConfigurationRepository\.getByAppId\(appId\)/);
+    assert.match(source, /await resolveSidecarConfiguration\(\s*configurationId,\s*appId,\s*paneId,/);
+    assert.match(source, /maftagsc\.sidecar\.authRequest\.\$\{authNamespace\}/);
+    assert.match(source, /window\.localStorage\.removeItem\(requestKey\)/);
+    assert.match(source, /resolveSidecarConfiguration\(\s*configuration\.configurationId,/);
+    assert.match(source, /sidecar_form_not_bound/);
     assert.match(source, /activity\.sequence - replaySequenceOffset/);
     assert.match(source, /generation === activeConversationGeneration/);
     assert.match(source, /deletedConversationIds\.has\(reference\.id\)/);
@@ -255,6 +263,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(customizations, /maftagsc_sidecarconversation/);
     assert.match(customizations, /maftagsc_sidecaractivity/);
     assert.match(customizations, /Agent Sidecar User/);
+    assert.doesNotMatch(customizations, /maftagsc_sidecarconfiguration_appid_key/);
     assert.match(
         customizations,
         /<RolePrivilege name="prvDeletemaftagsc_sidecarconversation" level="Basic" \/>/
@@ -279,6 +288,8 @@ test("authentication redirect completes sign-in via a same-origin localStorage h
     assert.match(html, /handleRedirectPromise/);
     assert.match(html, /acquireTokenRedirect/);
     assert.match(html, /maftagsc\.sidecar\.authResult/);
+    assert.match(html, /maftagsc\.sidecar\.authNamespace/);
+    assert.match(html, /sessionStorage/);
     assert.doesNotMatch(html, /broadcastResponseToMainFrame/);
     assert.doesNotMatch(html, /HR_AGENT_AUTH_REDIRECT_BUNDLE/);
 });

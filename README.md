@@ -15,7 +15,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 
 ## What you get
 
-- A **persistent side pane** on the forms you select, keyed per app, that stays open and keeps its conversation as users navigate between records.
+- Up to **10 independently configured side panes in one app**, each keyed by its immutable configuration GUID and retaining its own agent, identity, conversation, consent, and dialog state.
 - **Recent conversation resume** backed by user-owned Dataverse rows, including local transcript replay and Agents SDK server-context continuation.
 - **Live context**: the current table, record, and screen are sent to your agent before every message and updated automatically as the user moves around the app.
 - **Delegated authentication** (Microsoft Entra, authorization code with PKCE): the agent answers as the signed-in user, so knowledge stays subject to that user's existing permissions. No secrets live in the browser.
@@ -119,8 +119,8 @@ sequenceDiagram
 |---|---|
 | **Your model-driven app** | Provides the navigation shell, Dataverse forms, authenticated Power Platform session, and current page context. Your existing app is used as-is — nothing is recreated. |
 | **Form OnLoad handler** | The administration app registers a handler on each form you select, so the pane loads with that form. |
-| **JavaScript launcher** | Validates the current table and record, creates or reuses one stable pane per app, and writes the live record context so the open pane can follow navigation. |
-| **Persistent side pane** | Keyed per app, it starts collapsed and preserves the active conversation as the user navigates between records. |
+| **JavaScript launcher** | Resolves every valid enabled configuration bound to the current form, orders them by pane title then configuration ID, and creates or reuses each configuration-keyed pane. Malformed and colliding records are quarantined independently. |
+| **Persistent side pane** | Keyed by immutable configuration GUID, it starts collapsed and preserves only its own active conversation as the user navigates between records. |
 | **HTML host and client** | Hosts Web Chat, signs the user in, creates or resumes the Agents SDK connection, keeps context current, persists display-safe activities, and replays selected transcripts. |
 | **Conversation tables** | User-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` rows provide recent-conversation discovery and transcript replay without storing tokens, trusted context envelopes, or connector payloads. |
 | **Microsoft Entra app registration** | Authenticates the signed-in user with authorization code + PKCE and requests only `https://api.powerplatform.com/CopilotStudio.Copilots.Invoke`. No browser client secret exists. |
@@ -128,6 +128,16 @@ sequenceDiagram
 | **Your Copilot Studio agent** | Interprets the question and uses the supplied screen context to select relevant guidance from its knowledge. |
 | **Agent Sidecar Core solution** | Packages the sidecar tables, web resources, and the administration app. Import it to bring the whole capability into an environment. |
 | **Administration app** | The System Administrator experience for deploying, validating, reconciling, and removing sidecars. Built as a Power Apps Code App and shipped inside the Core solution. |
+
+### Multiple-sidecar design principles
+
+- Configuration GUID is identity; app ID is only a grouping key.
+- Pane IDs are derived as `maftagsc_sidecar_<configuration-guid-without-dashes>`; no pane/order columns are required.
+- Overlapping form bindings are supported through one reference-counted shared form dispatcher.
+- Every iframe resolves its exact configuration ID and verifies both app ID and pane ID.
+- Authentication request storage and popup names are configuration/nonce scoped. Agent connections, conversations, history, delete state, list dialogs, and consent trackers stay pane-local.
+- Navigation updates local context only. Distinct MCP consent requests are never auto-approved, and no administrative-consent bypass exists.
+- Direct-list-first startup remains out of scope; list analysis still begins from the explicit in-pane user flow.
 
 ## Context synchronization
 
@@ -191,6 +201,7 @@ The guide also includes a configuration worksheet, validation checklist, and tro
 - [Delegated authentication and Microsoft 365 Agents SDK](docs/adr/0003-use-delegated-agents-sdk-for-authenticated-side-pane.md)
 - [Reusable core and target binding product architecture](docs/adr/0004-productize-sidecar-as-core-and-target-bindings.md)
 - [Code App administration architecture](docs/adr/0005-use-code-app-for-sidecar-administration.md)
+- [Multiple independently configured sidecars per app](docs/adr/0007-support-multiple-sidecars-per-app.md)
 
 ## Reference data model (HR Management)
 
@@ -230,7 +241,7 @@ Using the sidecar needs nothing beyond the setup steps above. Contributors who w
 
 ## Design principles
 
-- One stable pane per app, so navigation never creates duplicate conversations.
+- One stable pane per Sidecar Configuration, so same-app sidecars remain independent without creating duplicate conversations.
 - Persist only display-safe conversation history in user-owned Dataverse rows and resume only conversation IDs captured from real SDK connections.
 - Capture context locally on every navigation and deliver the latest value only with a user prompt or explicit new conversation.
 - Treat record IDs as pointers, never as authorization or knowledge content.

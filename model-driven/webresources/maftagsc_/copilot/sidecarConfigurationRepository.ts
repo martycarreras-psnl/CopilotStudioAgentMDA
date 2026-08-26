@@ -1,20 +1,39 @@
 import {
+    filterSidecarConfigurations,
     normalizeGuid,
-    resolveSidecarConfiguration,
+    resolveSidecarConfigurationFromConfigurations,
     type SidecarConfiguration,
     type SidecarEntityBinding
 } from "./sidecarConfiguration";
 
 export interface SidecarConfigurationRepository {
-    getByAppId(appId: unknown): Promise<SidecarConfiguration>;
+    listByAppId(appId: unknown): Promise<SidecarConfiguration[]>;
+    getByConfigurationId(
+        configurationId: unknown,
+        appId: unknown,
+        paneId: unknown
+    ): Promise<SidecarConfiguration>;
 }
 
 export class BootstrapSidecarConfigurationRepository
 implements SidecarConfigurationRepository {
     constructor(private readonly configurations: readonly SidecarConfiguration[]) {}
 
-    async getByAppId(appId: unknown): Promise<SidecarConfiguration> {
-        return resolveSidecarConfiguration(this.configurations, appId);
+    async listByAppId(appId: unknown): Promise<SidecarConfiguration[]> {
+        return filterSidecarConfigurations(this.configurations, appId);
+    }
+
+    async getByConfigurationId(
+        configurationId: unknown,
+        appId: unknown,
+        paneId: unknown
+    ): Promise<SidecarConfiguration> {
+        return resolveSidecarConfigurationFromConfigurations(
+            this.configurations,
+            configurationId,
+            appId,
+            paneId
+        );
     }
 }
 
@@ -34,62 +53,83 @@ export class DataverseSidecarConfigurationRepository
 implements SidecarConfigurationRepository {
     constructor(private readonly getWebApi: () => DataverseWebApi) {}
 
-    async getByAppId(appId: unknown): Promise<SidecarConfiguration> {
+    async listByAppId(appId: unknown): Promise<SidecarConfiguration[]> {
         const normalizedAppId = normalizeGuid(appId);
         if (!normalizedAppId) {
-            return resolveSidecarConfiguration([], appId);
+            return filterSidecarConfigurations([], appId);
         }
 
         const escapedAppId = normalizedAppId.replace(/'/g, "''");
         const configurationResult = await this.getWebApi().retrieveMultipleRecords(
             "maftagsc_sidecarconfiguration",
             `?$select=maftagsc_sidecarconfigurationid,maftagsc_appid,maftagsc_panetitle,maftagsc_panewidth,maftagsc_publicclientapplicationid,maftagsc_tenantid,maftagsc_environmentid,maftagsc_agentschemaname,maftagsc_agentconnectionstring,statecode,statuscode&$filter=maftagsc_appid eq '${escapedAppId}' and statecode eq 0`,
-            2
+            50
         );
-        if (configurationResult.entities.length !== 1) {
-            return resolveSidecarConfiguration([], appId);
-        }
-
-        const record = configurationResult.entities[0];
-        const configurationId = normalizeGuid(record.maftagsc_sidecarconfigurationid);
-        if (!configurationId) {
-            return resolveSidecarConfiguration([], appId);
-        }
-        const bindingResult = await this.getWebApi().retrieveMultipleRecords(
-            "maftagsc_targetbinding",
-            `?$select=maftagsc_tablelogicalname,maftagsc_tabledisplayname,maftagsc_enabled&$filter=_maftagsc_sidecarconfiguration_value eq ${configurationId} and statecode eq 0 and maftagsc_enabled eq true`,
-            500
+        const configurations: Array<SidecarConfiguration | null> = await Promise.all(
+            configurationResult.entities.map(async record => {
+            const configurationId = normalizeGuid(record.maftagsc_sidecarconfigurationid);
+            if (!configurationId) return null;
+            try {
+                const bindingResult = await this.getWebApi().retrieveMultipleRecords(
+                    "maftagsc_targetbinding",
+                    `?$select=maftagsc_tablelogicalname,maftagsc_tabledisplayname,maftagsc_formid,maftagsc_enabled&$filter=_maftagsc_sidecarconfiguration_value eq ${configurationId} and statecode eq 0 and maftagsc_enabled eq true`,
+                    500
+                );
+                const entityBindings: Record<string, SidecarEntityBinding> = {};
+                for (const binding of bindingResult.entities) {
+                    const logicalName = String(binding.maftagsc_tablelogicalname ?? "").trim().toLowerCase();
+                    const formId = normalizeGuid(binding.maftagsc_formid);
+                    if (!logicalName || !formId) continue;
+                    const existing = entityBindings[logicalName];
+                    entityBindings[logicalName] = {
+                        logicalName,
+                        screenName: existing?.screenName ??
+                            `${String(binding.maftagsc_tabledisplayname ?? logicalName)} record form`,
+                        formIds: [...(existing?.formIds ?? []), formId]
+                    };
+                }
+                return {
+                    configurationId,
+                    appId: normalizedAppId,
+                    enabled: true,
+                    paneId: `maftagsc_sidecar_${configurationId.replace(/-/g, "")}`,
+                    paneTitle: String(record.maftagsc_panetitle ?? "Agent Sidecar"),
+                    paneWidth: Number(record.maftagsc_panewidth ?? 420),
+                    webResourceName: "maftagsc_/copilot/agentSidePane.html",
+                    iconWebResource: "WebResources/maftagsc_/copilot/agentGuideLibrary.svg",
+                    clientId: String(record.maftagsc_publicclientapplicationid ?? ""),
+                    tenantId: String(record.maftagsc_tenantid ?? ""),
+                    environmentId: String(record.maftagsc_environmentid ?? ""),
+                    agentSchemaName: String(record.maftagsc_agentschemaname ?? ""),
+                    agentConnectionString: String(record.maftagsc_agentconnectionstring ?? ""),
+                    scope: "https://api.powerplatform.com/CopilotStudio.Copilots.Invoke",
+                    redirectPath: "/WebResources/maftagsc_/copilot/authRedirect.html",
+                    contextLabel: `${String(record.maftagsc_panetitle ?? "Agent Sidecar")} app`,
+                    defaultScreenName: "Model-driven App record form",
+                    entityBindings
+                } satisfies SidecarConfiguration;
+            } catch {
+                return null;
+            }
+            })
         );
-        const entityBindings: Record<string, SidecarEntityBinding> = {};
-        for (const binding of bindingResult.entities) {
-            const logicalName = String(binding.maftagsc_tablelogicalname ?? "").trim().toLowerCase();
-            if (!logicalName || entityBindings[logicalName]) continue;
-            entityBindings[logicalName] = {
-                logicalName,
-                screenName: `${String(binding.maftagsc_tabledisplayname ?? logicalName)} record form`
-            };
-        }
+        return filterSidecarConfigurations(
+            configurations.filter((value): value is SidecarConfiguration => value !== null),
+            appId
+        );
+    }
 
-        return resolveSidecarConfiguration([{
+    async getByConfigurationId(
+        configurationId: unknown,
+        appId: unknown,
+        paneId: unknown
+    ): Promise<SidecarConfiguration> {
+        return resolveSidecarConfigurationFromConfigurations(
+            await this.listByAppId(appId),
             configurationId,
-            appId: normalizedAppId,
-            enabled: true,
-            paneId: `maftagsc_sidecar_${normalizedAppId.replace(/-/g, "")}`,
-            paneTitle: String(record.maftagsc_panetitle ?? "Agent Sidecar"),
-            paneWidth: Number(record.maftagsc_panewidth ?? 420),
-            webResourceName: "maftagsc_/copilot/agentSidePane.html",
-            iconWebResource: "WebResources/maftagsc_/copilot/agentGuideLibrary.svg",
-            clientId: String(record.maftagsc_publicclientapplicationid ?? ""),
-            tenantId: String(record.maftagsc_tenantid ?? ""),
-            environmentId: String(record.maftagsc_environmentid ?? ""),
-            agentSchemaName: String(record.maftagsc_agentschemaname ?? ""),
-            agentConnectionString: String(record.maftagsc_agentconnectionstring ?? ""),
-            scope: "https://api.powerplatform.com/CopilotStudio.Copilots.Invoke",
-            redirectPath: "/WebResources/maftagsc_/copilot/authRedirect.html",
-            contextLabel: `${String(record.maftagsc_panetitle ?? "Agent Sidecar")} app`,
-            defaultScreenName: "Model-driven App record form",
-            entityBindings
-        }], appId);
+            appId,
+            paneId
+        );
     }
 }
 
@@ -100,11 +140,31 @@ implements SidecarConfigurationRepository {
         private readonly fallback: SidecarConfigurationRepository
     ) {}
 
-    async getByAppId(appId: unknown): Promise<SidecarConfiguration> {
+    async listByAppId(appId: unknown): Promise<SidecarConfiguration[]> {
         try {
-            return await this.primary.getByAppId(appId);
-        } catch {
-            return this.fallback.getByAppId(appId);
+            return await this.primary.listByAppId(appId);
+        } catch (error) {
+            const code = error && typeof error === "object" && "errorCode" in error
+                ? String(error.errorCode)
+                : error instanceof Error ? error.message : "";
+            if (code !== "sidecar_dataverse_webapi_unavailable") {
+                throw error;
+            }
+            return this.fallback.listByAppId(appId);
         }
+    }
+
+    async getByConfigurationId(
+        configurationId: unknown,
+        appId: unknown,
+        paneId: unknown
+    ): Promise<SidecarConfiguration> {
+        const configurations = await this.listByAppId(appId);
+        return resolveSidecarConfigurationFromConfigurations(
+            configurations,
+            configurationId,
+            appId,
+            paneId
+        );
     }
 }

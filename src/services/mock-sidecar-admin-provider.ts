@@ -96,8 +96,17 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
       return clone(impacts);
     },
     async deploy(draft: SidecarDraft, onProgress?: SidecarProgressCallback) {
-      if (configurations.some((item) => item.appId.toLowerCase() === draft.targetApp.appId.toLowerCase())) {
-        throw new Error('This Model-driven App already has a sidecar configuration.');
+      const enabledForApp = configurations.filter((item) =>
+        item.appId.toLowerCase() === draft.targetApp.appId.toLowerCase()
+        && item.lifecycleState !== 'disabled',
+      );
+      if (enabledForApp.length >= 10) {
+        throw new Error('A Model-driven App can have at most 10 enabled sidecar configurations.');
+      }
+      if (configurations.some((item) =>
+        item.bindingSolutionUniqueName.toLowerCase() === draft.bindingSolutionUniqueName.trim().toLowerCase()
+      )) {
+        throw new Error('Choose a unique Target Binding solution name.');
       }
       const forms = draft.tables.filter((table) => table.enabled).flatMap((table) => table.forms.filter((form) => form.enabled).map((form) => `${table.displayName} — ${form.name}`));
       for (let index = 0; index < forms.length; index += 1) {
@@ -129,7 +138,7 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
         lastValidatedAt: now(),
         lastOperationSummary: 'Deployment completed and live metadata read-back passed.',
         healthChecks: [
-          { id: 'config', label: 'Configuration', state: 'pass', detail: 'One enabled app-keyed configuration resolved.' },
+          { id: 'config', label: 'Configuration', state: 'pass', detail: 'The configuration resolves by its immutable ID.' },
           { id: 'forms', label: 'Active main forms', state: 'pass', detail: 'Selected forms passed read-back verification.' },
           { id: 'identity', label: 'Delegated identity', state: 'pass', detail: 'Public-client setup values are complete.' },
           { id: 'agent', label: 'Copilot Studio agent', state: 'pass', detail: 'Existing published agent resolved successfully.' },
@@ -167,6 +176,16 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
       const configuration = requireConfiguration(configurations, id);
       if (enabled && configuration.healthState === 'critical') {
         throw new Error('Resolve blocking health failures before enabling this sidecar.');
+      }
+      if (enabled) {
+        const enabledForApp = configurations.filter((item) =>
+          item.id !== id
+          && item.appId.toLowerCase() === configuration.appId.toLowerCase()
+          && item.lifecycleState !== 'disabled',
+        );
+        if (enabledForApp.length >= 10) {
+          throw new Error('A Model-driven App can have at most 10 enabled sidecar configurations.');
+        }
       }
       onProgress?.({ phase: 'forms', current: 1, total: 1, label: enabled ? 'Enabling bindings' : 'Disabling bindings' });
       configuration.lifecycleState = enabled ? 'deployed' : 'disabled';

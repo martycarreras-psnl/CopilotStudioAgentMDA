@@ -428,6 +428,29 @@ def ensure_alternate_key(client: Any, table: str, key_name: str, columns: list[s
     print(f"Created alternate key: {key_name}", flush=True)
 
 
+def remove_obsolete_alternate_key(client: Any, table: str, key_name: str) -> None:
+    existing = next(
+        (
+            key
+            for key in client.tables.get_alternate_keys(table)
+            if key.schema_name == key_name
+        ),
+        None,
+    )
+    if existing is None:
+        return
+
+    client.tables.delete_alternate_key(table, existing.metadata_id)
+    for _ in range(30):
+        if all(
+            key.schema_name != key_name
+            for key in client.tables.get_alternate_keys(table)
+        ):
+            return
+        time.sleep(2)
+    raise RuntimeError(f"Timed out deleting obsolete alternate key {key_name}.")
+
+
 def main() -> None:
     api = DataverseMetadataApi()
     sdk_client = get_client("dv-metadata")
@@ -447,12 +470,10 @@ def main() -> None:
 
     api.ensure_relationship()
 
-    ensure_alternate_key(
+    remove_obsolete_alternate_key(
         sdk_client,
         "maftagsc_sidecarconfiguration",
         "maftagsc_sidecarconfiguration_appid_key",
-        ["maftagsc_appid"],
-        "Sidecar Configuration App ID",
     )
     ensure_alternate_key(
         sdk_client,

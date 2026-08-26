@@ -10,7 +10,7 @@
         <LocalizedCollectionName description="Sidecar Configurations" languagecode="1033" />
       </LocalizedCollectionNames>
       <Descriptions>
-        <Description description="Desired state for one app-keyed Agent Sidecar." languagecode="1033" />
+        <Description description="Desired state for one independently identified Agent Sidecar; multiple configurations may target the same app." languagecode="1033" />
       </Descriptions>
       <attributes>
         <attribute PhysicalName="CreatedBy">
@@ -1265,20 +1265,6 @@
           </Descriptions>
         </attribute>
       </attributes>
-      <EntityKeys>
-        <EntityKey>
-          <Name>maftagsc_sidecarconfiguration_appid_key</Name>
-          <LogicalName>maftagsc_sidecarconfiguration_appid_key</LogicalName>
-          <IntroducedVersion>1.0</IntroducedVersion>
-          <IsCustomizable>0</IsCustomizable>
-          <EntityKeyAttributes>
-            <AttributeName>maftagsc_appid</AttributeName>
-          </EntityKeyAttributes>
-          <displaynames>
-            <displayname description="Sidecar Configuration App ID" languagecode="1033" />
-          </displaynames>
-        </EntityKey>
-      </EntityKeys>
       <EntitySetName>maftagsc_sidecarconfigurations</EntitySetName>
       <IsDuplicateCheckSupported>0</IsDuplicateCheckSupported>
       <IsBusinessProcessEnabled>0</IsBusinessProcessEnabled>

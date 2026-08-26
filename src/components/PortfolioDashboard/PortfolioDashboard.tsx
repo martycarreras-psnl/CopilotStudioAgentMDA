@@ -56,7 +56,7 @@ export function PortfolioDashboard({ configurations = [], loading, error, onCrea
         <div className={styles.intro}>
           <Title1 as="h1">Sidecar portfolio</Title1>
           <Text size={400} className={styles.subtitle}>
-            Configure, validate, reconcile, disable, and safely remove app-keyed Copilot Studio sidecars.
+            Configure, validate, reconcile, disable, and safely remove independently identified Copilot Studio sidecars.
           </Text>
         </div>
         <Button appearance="primary" size="large" icon={<AddRegular />} onClick={onCreate}>Create sidecar</Button>
@@ -65,7 +65,7 @@ export function PortfolioDashboard({ configurations = [], loading, error, onCrea
       {error && <MessageBar intent="error"><MessageBarBody><MessageBarTitle>Portfolio unavailable</MessageBarTitle>{error}</MessageBarBody></MessageBar>}
 
       <section className={styles.metrics} aria-label="Portfolio summary">
-        <Card className={styles.metric}><Text className={styles.label}>Configured apps</Text><Text className={styles.metricValue}>{configurations.length}</Text></Card>
+        <Card className={styles.metric}><Text className={styles.label}>Configured sidecars</Text><Text className={styles.metricValue}>{configurations.length}</Text></Card>
         <Card className={styles.metric}><Text className={styles.label}>Healthy</Text><Text className={styles.metricValue}><CheckmarkCircleRegular /> {healthy}</Text></Card>
         <Card className={styles.metric}><Text className={styles.label}>Needs attention</Text><Text className={styles.metricValue}><WarningRegular /> {attention}</Text></Card>
       </section>

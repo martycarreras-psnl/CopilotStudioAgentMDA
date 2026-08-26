@@ -11,12 +11,14 @@ import {
     type CopilotStudioWebChatConnection
 } from "@microsoft/agents-copilotstudio-client";
 import type { Activity } from "@microsoft/agents-activity";
-import { of, tap } from "rxjs";
+import { from, of, switchMap, tap } from "rxjs";
 import { sidecarConfigurationRepository } from "./hrSidecarBootstrap";
 import { createConnectorConsentTracker } from "./sidecarConnectorConsent";
 import {
     getEntityBinding,
+    isFormBound,
     normalizeGuid,
+    resolveSidecarConfiguration,
     type SidecarConfiguration
 } from "./sidecarConfiguration";
 import {
@@ -44,12 +46,12 @@ import {
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
 const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
 const LIST_ANALYSIS_SELECTION_KEY = "maftagscListAnalysisSelection";
-const AUTH_REQUEST_KEY = "maftagsc.sidecar.authRequest";
 const AUTH_RESULT_PREFIX = "maftagsc.sidecar.authResult.";
 
 interface LaunchContext {
     pageType: "entityrecord" | "entitylist";
     entityName: string;
+    formId: string | null;
     recordId: string | null;
     recordName: string;
     appId: string | null;
@@ -86,6 +88,13 @@ interface HostXrm {
     Page?: {
         data?: {
             entity?: HostFormEntity;
+        };
+        ui?: {
+            formSelector?: {
+                getCurrentItem?(): {
+                    getId?(): unknown;
+                } | null;
+            };
         };
     };
     WebApi?: {
@@ -173,8 +182,15 @@ async function parseLaunchRequest(): Promise<LaunchRequest> {
         throw new Error("Screen context is invalid.");
     }
 
+    const configurationId = normalizeGuid(value.configurationId);
     const appId = normalizeGuid(value.appId);
-    const configuration = await sidecarConfigurationRepository.getByAppId(appId);
+    const paneId = String(value.paneId ?? "");
+    const configuration = await resolveSidecarConfiguration(
+        configurationId,
+        appId,
+        paneId,
+        sidecarConfigurationRepository
+    );
     const entityName = String(value.entityName || "").trim().toLowerCase();
     if (!getEntityBinding(configuration, entityName)) {
         throw new Error("Screen-specific help isn't available for this table.");
@@ -190,6 +206,7 @@ async function parseLaunchRequest(): Promise<LaunchRequest> {
         context: {
             pageType: value.pageType === "entitylist" ? "entitylist" : "entityrecord",
             entityName,
+            formId: value.pageType === "entitylist" ? null : normalizeGuid(value.formId),
             recordId,
             recordName: String(value.recordName || "").slice(0, 200),
             appId,
@@ -244,11 +261,20 @@ function getCurrentContext(
             ? input.pageType
             : null;
         const entityName = String(input?.entityName ?? "").trim().toLowerCase();
-        if (!pageType || !getEntityBinding(configuration, entityName)) {
+        if (!pageType) {
             return fallback;
+        }
+        if (!getEntityBinding(configuration, entityName)) {
+            throw new Error("sidecar_form_not_bound");
         }
 
         const recordId = pageType === "entityrecord" ? normalizeGuid(input?.entityId) : null;
+        const formId = pageType === "entityrecord"
+            ? normalizeGuid(hostXrm?.Page?.ui?.formSelector?.getCurrentItem?.()?.getId?.())
+            : null;
+        if (pageType === "entityrecord" && !isFormBound(configuration, entityName, formId)) {
+            throw new Error("sidecar_form_not_bound");
+        }
         const viewId = pageType === "entitylist" ? normalizeGuid(input?.viewId) : null;
         const viewType = pageType === "entitylist" &&
             (input?.viewType === "savedquery" || input?.viewType === "userquery")
@@ -265,6 +291,7 @@ function getCurrentContext(
         return {
             pageType,
             entityName,
+            formId,
             recordId,
             recordName: currentRecordName ?? (isSameRecord ? fallback.recordName : ""),
             appId: fallback.appId,
@@ -272,7 +299,10 @@ function getCurrentContext(
             viewId,
             viewType
         };
-    } catch {
+    } catch (error) {
+        if (error instanceof Error && error.message === "sidecar_form_not_bound") {
+            throw error;
+        }
         return fallback;
     }
 }
@@ -296,6 +326,7 @@ function readSharedContext(
         return {
             pageType,
             entityName,
+            formId: pageType === "entityrecord" ? normalizeGuid(parsed.formId) : null,
             recordId: parsed.recordId ? normalizeGuid(parsed.recordId) : null,
             recordName: typeof parsed.recordName === "string" ? parsed.recordName.slice(0, 200) : "",
             appId: parsed.appId ?? fallback.appId,
@@ -317,9 +348,16 @@ function resolveContext(
     const sharedContext = readSharedContext(configuration, fallback);
     const stableContext = sharedContext ?? fallback;
     const liveContext = getCurrentContext(stableContext, configuration);
-    return !sharedContext || liveContext.pageType === "entitylist"
+    const resolved = !sharedContext || liveContext.pageType === "entitylist"
         ? liveContext
         : sharedContext;
+    if (
+        resolved.pageType === "entityrecord" &&
+        !isFormBound(configuration, resolved.entityName, resolved.formId)
+    ) {
+        throw new Error("sidecar_form_not_bound");
+    }
+    return resolved;
 }
 
 function requestListAnalysisScope(currentViewAvailable: boolean): Promise<ListAnalysisScope | null> {
@@ -648,10 +686,16 @@ function getCachedAccount(client: PublicClientApplication): AccountInfo | undefi
  * a first-party context.
  */
 async function runInteractiveSignIn(configuration: SidecarConfiguration): Promise<void> {
+    if (!configuration.configurationId) {
+        throw new Error("sidecar_configuration_id_invalid");
+    }
     const redirectUri = `${window.location.origin}${configuration.redirectPath}`;
     const nonce = crypto.randomUUID();
+    const authNamespace = `${configuration.configurationId}.${nonce}`;
+    const requestKey = `maftagsc.sidecar.authRequest.${authNamespace}`;
     const resultKey = `${AUTH_RESULT_PREFIX}${nonce}`;
-    window.localStorage.setItem(AUTH_REQUEST_KEY, JSON.stringify({
+    window.localStorage.setItem(requestKey, JSON.stringify({
+        configurationId: configuration.configurationId,
         clientId: configuration.clientId,
         authority: `https://login.microsoftonline.com/${configuration.tenantId}`,
         redirectUri,
@@ -661,8 +705,8 @@ async function runInteractiveSignIn(configuration: SidecarConfiguration): Promis
     window.localStorage.removeItem(resultKey);
 
     const popup = window.open(
-        `${redirectUri}?sidecarAuth=start&nonce=${encodeURIComponent(nonce)}`,
-        "maftagsc-sidecar-auth",
+        `${redirectUri}?sidecarAuth=start&configurationId=${encodeURIComponent(configuration.configurationId)}&nonce=${encodeURIComponent(nonce)}`,
+        `maftagsc-sidecar-auth-${configuration.configurationId}-${nonce}`,
         "width=520,height=680"
     );
     if (!popup) {
@@ -696,6 +740,7 @@ async function runInteractiveSignIn(configuration: SidecarConfiguration): Promis
             }, 300);
         });
     } finally {
+        window.localStorage.removeItem(requestKey);
         window.localStorage.removeItem(resultKey);
         try {
             if (!popup.closed) {
@@ -1034,36 +1079,52 @@ async function renderConversation(
         const originalText = activity.type === "message"
             ? activity.text?.trim()
             : undefined;
-        if (!originalText) {
-            return postActivity(activity);
-        }
+        return from(resolveSidecarConfiguration(
+            configuration.configurationId,
+            configuration.appId,
+            configuration.paneId,
+            sidecarConfigurationRepository
+        )).pipe(
+            switchMap(() => {
+                if (!originalText) {
+                    return postActivity(activity);
+                }
 
-        const currentContext = resolveContext(activeContext ?? context, configuration);
-        activeContext = currentContext;
-        const requestedListAnalysisSelection = parseListAnalysisSelection(
-            activity.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
+                const currentContext = resolveContext(activeContext ?? context, configuration);
+                activeContext = currentContext;
+                const requestedListAnalysisSelection = parseListAnalysisSelection(
+                    activity.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
+                );
+                const listAnalysisSelection = requestedListAnalysisSelection &&
+                    currentContext.pageType === "entitylist" &&
+                    currentContext.entityName === requestedListAnalysisSelection.tableLogicalName
+                    ? requestedListAnalysisSelection
+                    : null;
+                const forwardedChannelData = { ...activity.channelData };
+                delete forwardedChannelData[LIST_ANALYSIS_SELECTION_KEY];
+
+                return postActivity({
+                    ...activity,
+                    text: createContextEnvelope(
+                        currentContext,
+                        originalText,
+                        configuration,
+                        listAnalysisSelection
+                    ),
+                    channelData: {
+                        ...forwardedChannelData,
+                        [ORIGINAL_TEXT_KEY]: originalText
+                    }
+                } as Activity);
+            }),
+            tap({
+                error: () => {
+                    if (consentClaim) {
+                        connectorConsentTracker.release(consentClaim.key);
+                    }
+                }
+            })
         );
-        const listAnalysisSelection = requestedListAnalysisSelection &&
-            currentContext.pageType === "entitylist" &&
-            currentContext.entityName === requestedListAnalysisSelection.tableLogicalName
-            ? requestedListAnalysisSelection
-            : null;
-        const forwardedChannelData = { ...activity.channelData };
-        delete forwardedChannelData[LIST_ANALYSIS_SELECTION_KEY];
-
-        return postActivity({
-            ...activity,
-            text: createContextEnvelope(
-                currentContext,
-                originalText,
-                configuration,
-                listAnalysisSelection
-            ),
-            channelData: {
-                ...forwardedChannelData,
-                [ORIGINAL_TEXT_KEY]: originalText
-            }
-        } as Activity);
     };
     const store = createContextStore(
         window.WebChat,

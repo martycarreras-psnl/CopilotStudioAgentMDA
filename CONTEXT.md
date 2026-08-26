@@ -5,12 +5,20 @@ Agent Sidecar Platform provides a reusable contextual Copilot Studio experience 
 ## Platform Administration
 
 **Agent Sidecar**:
-One app-keyed contextual assistant that connects a target Model-driven App to one existing Copilot Studio agent through a persistent side pane.
+One independently configured contextual assistant that connects a target Model-driven App to one existing Copilot Studio agent through its own persistent side pane. An app may host up to ten enabled Agent Sidecars.
 _Avoid_: Embedded bot, chatbot panel, global environment agent
 
 **Sidecar Configuration**:
-The current desired state for one Agent Sidecar, including its target app, enabled tables, existing agent, pane identity, public-client identifiers, and lifecycle state.
+The current desired state and immutable identity for one Agent Sidecar, including its target app, enabled forms, existing agent, derived pane identity, public-client identifiers, and lifecycle state. Its configuration GUID is unique; the app ID only groups sidecars.
 _Avoid_: Installation record, deployment history, bot settings
+
+**Sidecar Pane**:
+The persistent pane owned by one Sidecar Configuration, identified as `maftagsc_sidecar_<configuration-guid-without-dashes>` and isolated from every other pane's agent, authentication, conversation, consent, and dialog state.
+_Avoid_: App pane, shared pane, app-keyed pane
+
+**Shared Form Dispatcher**:
+The single `AgentSidecar.initializeGuide` OnLoad handler and library registration shared by every enabled Sidecar Configuration bound to a form; it remains until its last enabled owner releases that form.
+_Avoid_: Configuration handler, per-sidecar form script
 
 **Target Binding**:
 The sidecar-owned structural customizations that attach one Sidecar Configuration to a target Model-driven App's lists and main forms.

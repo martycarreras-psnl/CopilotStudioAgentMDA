@@ -1,6 +1,6 @@
 import { sidecarConfigurationRepository } from "./hrSidecarBootstrap";
 import {
-    getEntityBinding,
+    isFormBound,
     normalizeGuid,
     type SidecarConfiguration
 } from "./sidecarConfiguration";
@@ -20,6 +20,13 @@ interface FormEntity {
 interface FormContext {
     data?: {
         entity?: FormEntity;
+    };
+    ui?: {
+        formSelector?: {
+            getCurrentItem?(): {
+                getId?(): unknown;
+            } | null;
+        };
     };
 }
 
@@ -55,6 +62,7 @@ interface GlobalContext {
 }
 
 interface SidePane {
+    hidden: boolean;
     navigate(input: Record<string, unknown>): Promise<void>;
 }
 
@@ -86,15 +94,16 @@ declare global {
 interface LaunchContext {
     pageType: "entityrecord";
     entityName: string;
+    formId: string | null;
     recordId: string | null;
     recordName: string;
     appId: string;
     roles: string[];
 }
 
-async function getConfiguration(): Promise<SidecarConfiguration> {
+async function getConfigurations(): Promise<SidecarConfiguration[]> {
     const appProperties = await Xrm.Utility.getGlobalContext().getCurrentAppProperties();
-    return sidecarConfigurationRepository.getByAppId(appProperties.appId);
+    return sidecarConfigurationRepository.listByAppId(appProperties.appId);
 }
 
 // Read the signed-in user's Dataverse security-role names from the host global
@@ -132,10 +141,9 @@ function getLaunchContext(
     }
 
     const entityName = String(entity.getEntityName() ?? "").trim().toLowerCase();
-    if (!getEntityBinding(configuration, entityName)) {
-        throw new Error("The configured guide is not available for this table.");
-    }
-
+    const formId = normalizeGuid(
+        formContext.ui?.formSelector?.getCurrentItem?.()?.getId?.()
+    );
     const rawRecordId = entity.getId();
     const recordId = rawRecordId ? normalizeGuid(rawRecordId) : null;
     if (rawRecordId && !recordId) {
@@ -149,6 +157,7 @@ function getLaunchContext(
     return {
         pageType: "entityrecord",
         entityName,
+        formId,
         recordId,
         recordName,
         appId: configuration.appId,
@@ -167,8 +176,11 @@ function createPageInput(
         pageType: "webresource",
         webresourceName: configuration.webResourceName,
         data: JSON.stringify({
+            configurationId: configuration.configurationId,
+            paneId: configuration.paneId,
             pageType: context.pageType,
             entityName: context.entityName,
+            formId: context.formId,
             recordId: context.recordId,
             recordName: context.recordName,
             appId: context.appId
@@ -184,10 +196,10 @@ function writeSharedContext(paneId: string, context: LaunchContext): void {
     }
 }
 
-async function ensurePane(formContext: FormContext): Promise<SidePane> {
-    const configuration = await getConfiguration();
-    const context = getLaunchContext(formContext, configuration);
-    writeSharedContext(configuration.paneId, context);
+async function ensurePane(
+    configuration: SidecarConfiguration,
+    context: LaunchContext
+): Promise<SidePane> {
     let pane = Xrm.App.sidePanes.getPane(configuration.paneId);
 
     if (!pane) {
@@ -202,6 +214,8 @@ async function ensurePane(formContext: FormContext): Promise<SidePane> {
         });
 
         await pane.navigate(createPageInput(configuration, context));
+    } else {
+        pane.hidden = false;
     }
 
     return pane;
@@ -213,7 +227,26 @@ async function initialize(executionContext: ExecutionContext): Promise<void> {
         if (!formContext) {
             throw new Error("The current form context is unavailable.");
         }
-        await ensurePane(formContext);
+        const configurations = await getConfigurations();
+        const entityName = String(
+            formContext.data?.entity?.getEntityName() ?? ""
+        ).trim().toLowerCase();
+        for (const configuration of configurations) {
+            const context = getLaunchContext(formContext, configuration);
+            writeSharedContext(configuration.paneId, context);
+            const isBound = isFormBound(configuration, entityName, context.formId);
+            const existingPane = Xrm.App.sidePanes.getPane(configuration.paneId);
+            if (existingPane) {
+                existingPane.hidden = !isBound;
+            }
+            if (isBound) {
+                try {
+                    await ensurePane(configuration, context);
+                } catch {
+                    console.warn("An Agent Sidecar pane couldn't be initialized (sidecar_pane_initialization_failed).");
+                }
+            }
+        }
     } catch (error) {
         // Avoid logging target record data, tokens, or connector payloads.
         const code = error && typeof error === "object" && "errorCode" in error

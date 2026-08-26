@@ -225,7 +225,9 @@ export function SidecarWizard({
     setExpandedTables(new Set());
     setName(`${app.displayName} Assistant`);
     setPaneTitle(`${app.displayName} Assistant`);
-    setSolutionName(`${app.uniqueName.replace(/[^A-Za-z0-9]/g, '')}SidecarBinding`);
+    setSolutionName(
+      `${app.uniqueName.replace(/[^A-Za-z0-9]/g, '')}Sidecar${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`,
+    );
     setLocalError(undefined);
   };
 

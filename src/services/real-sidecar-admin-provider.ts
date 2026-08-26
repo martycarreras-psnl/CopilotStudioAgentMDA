@@ -17,6 +17,7 @@ import type { SidecarConfiguration, SidecarDraft, SidecarHealthCheck, SidecarHea
 import { parseCopilotStudioConnectionString } from '@/utils/agent-link';
 import { discoverAppForms, type DiscoveredForm } from '@/services/model-driven-app-discovery';
 import { isInformationFormName } from '@/lib/target-forms';
+import { hasOtherEnabledFormOwner } from '@/lib/shared-form-owner';
 
 const ADMIN_ROLE_TEMPLATE = '627090ff-40a3-4053-8790-584edc5be201';
 const SIDECAR_PUBLISHER = 'agentsidecar';
@@ -208,43 +209,61 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     if (!publishers[0]) throw new Error('The Agent Sidecar publisher is unavailable.');
     return publishers[0].publisherid;
   }
-  async function ensureBindingSolution(uniqueName: string, appId: string): Promise<{ id: string; created: boolean }> {
+  function bindingSolutionMarker(appId: string, configurationId: string): string {
+    return `Agent Sidecar Target Binding for app ${guid(appId, 'Model-driven App ID')} configuration ${guid(configurationId, 'Configuration ID')}`;
+  }
+  async function findBindingSolution(uniqueName: string) {
     const normalizedName = uniqueName.trim();
     if (!/^[A-Za-z][A-Za-z0-9_]{0,64}$/.test(normalizedName)) {
       throw new Error('Target Binding solution must start with a letter and contain at most 65 letters, numbers, or underscores.');
     }
-    const marker = `Agent Sidecar Target Binding for app ${guid(appId, 'Model-driven App ID')}`;
-    // `publisheridprefix` is not a queryable column on the solution table; resolve
-    // ownership by comparing the solution's publisher lookup to the Agent Sidecar publisher.
-    const publisherId = await sidecarPublisherId();
-    const existing = data(await SolutionsService.getAll({
+    return data(await SolutionsService.getAll({
       select: ['solutionid', 'description', 'ismanaged', '_publisherid_value'], filter: `uniquename eq '${odataString(normalizedName)}'`, top: 1,
-    }), 'Find Target Binding solution');
-    if (existing[0]) {
-      const ownedByPublisher = (existing[0]._publisherid_value ?? '').toLowerCase() === publisherId.toLowerCase();
-      if (existing[0].ismanaged || !ownedByPublisher || existing[0].description !== marker) {
-        throw new Error(`Solution ${normalizedName} exists but is not owned by this app's Agent Sidecar binding.`);
-      }
-      return { id: existing[0].solutionid, created: false };
+    }), 'Find Target Binding solution')[0];
+  }
+  async function validateBindingSolutionName(uniqueName: string): Promise<void> {
+    if (await findBindingSolution(uniqueName)) {
+      throw new Error(`Solution ${uniqueName.trim()} already exists. Choose a unique Target Binding solution name.`);
     }
+  }
+  async function createBindingSolution(uniqueName: string, appId: string, configurationId: string): Promise<string> {
+    const normalizedName = uniqueName.trim();
+    const publisherId = await sidecarPublisherId();
     const created = data(await SolutionsService.create({
-      friendlyname: normalizedName, uniquename: normalizedName, description: marker, version: '1.0.0.0',
+      friendlyname: normalizedName, uniquename: normalizedName,
+      description: bindingSolutionMarker(appId, configurationId), version: '1.0.0.0',
       enabledforsourcecontrolintegration: false, sourcecontrolsyncstatus: 0,
       'publisherid@odata.bind': `/publishers(${publisherId})`,
     } as unknown as Parameters<typeof SolutionsService.create>[0]), 'Create Target Binding solution');
-    return { id: created.solutionid, created: true };
+    return created.solutionid;
   }
   async function validate(id: string): Promise<SidecarConfiguration> {
     const configurationId = guid(id, 'Configuration ID');
     const record = data(await Configurations.get(configurationId), 'Read sidecar configuration'); const bindings = await bindingsFor(configurationId);
+    const [allBindings, activeConfigurations] = await Promise.all([
+      bindingsFor(),
+      Configurations.getAll({ select: ['maftagsc_sidecarconfigurationid'], filter: 'statecode eq 0', top: 5000 }),
+    ]);
+    const activeConfigurationIds = new Set(
+      data(activeConfigurations, 'List enabled sidecar configurations')
+        .map((configuration) => configuration.maftagsc_sidecarconfigurationid.toLowerCase()),
+    );
     let warnings = 0; let failures = 0;
     for (const binding of bindings) {
       try {
         const form = data(await SystemformsService.get(guid(binding.maftagsc_formid, 'Form ID'), { select: ['formxml'] }), 'Read bound form');
         const present = includesHandler(form.formxml, binding.maftagsc_handleruniqueid);
-        const shouldBePresent = record.statecode === 0 && binding.maftagsc_enabled;
+        const shouldBePresent = (record.statecode === 0 && binding.maftagsc_enabled)
+          || hasOtherEnabledFormOwner(
+            allBindings,
+            activeConfigurationIds,
+            binding.maftagsc_formid,
+            configurationId,
+          );
         const presenceConflict = present !== shouldBePresent;
-        const changed = shouldBePresent && await hash(form.formxml) !== binding.maftagsc_lastappliedfingerprint;
+        const changed = record.statecode === 0
+          && binding.maftagsc_enabled
+          && await hash(form.formxml) !== binding.maftagsc_lastappliedfingerprint;
         const state = presenceConflict ? VALIDATION.conflict : changed ? VALIDATION.warning : VALIDATION.pass;
         if (presenceConflict) failures += 1; else if (changed) warnings += 1;
         if (state !== binding.maftagsc_validationstate) data(await Bindings.update(binding.maftagsc_targetbindingid, { maftagsc_validationstate: state }), 'Save binding validation');
@@ -254,7 +273,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     const summary = failures ? `${failures} target binding(s) failed validation.` : warnings ? `${warnings} live form change(s) require review.` : 'Health validation completed; configuration and live bindings match.';
     const updated = data(await Configurations.update(configurationId, { maftagsc_healthstate: state, maftagsc_lastvalidatedat: new Date().toISOString(), maftagsc_lastoperationsummary: summary, ...(warnings ? { statuscode: STATUS.drift } : {}) }), 'Save health status');
     const checks: SidecarHealthCheck[] = [
-      { id: 'config', label: 'Configuration', state: 'pass', detail: 'The app-keyed configuration resolves uniquely.' },
+      { id: 'config', label: 'Configuration', state: 'pass', detail: 'The configuration resolves by its immutable ID.' },
       { id: 'forms', label: 'Active main forms', state: failures ? 'fail' : warnings ? 'warning' : 'pass', detail: summary },
       { id: 'identity', label: 'Delegated identity', state: record.maftagsc_tenantid && record.maftagsc_publicclientapplicationid ? 'pass' : 'fail', detail: 'Tenant and public-client identifiers are stored without secrets.' },
       { id: 'agent', label: 'Copilot Studio agent', state: 'pass', detail: `Configured agent: ${record.maftagsc_agentschemaname}.` },
@@ -263,7 +282,24 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
   }
   async function mutate(id: string, mode: 'apply' | 'remove', onProgress?: SidecarProgressCallback): Promise<Maftagsc_targetbindings[]> {
     assertSidecarActionsAvailable();
-    const bindings = await bindingsFor(guid(id, 'Configuration ID')); const tables: string[] = [];
+    const configurationId = guid(id, 'Configuration ID');
+    const bindings = await bindingsFor(configurationId); const tables: string[] = [];
+    async function hasLiveOtherOwner(formId: string): Promise<boolean> {
+      const [allBindings, activeConfigurationsResult] = await Promise.all([
+        bindingsFor(),
+        Configurations.getAll({ select: ['maftagsc_sidecarconfigurationid'], filter: 'statecode eq 0', top: 5000 }),
+      ]);
+      const activeConfigurationIds = new Set(
+        data(activeConfigurationsResult, 'List enabled sidecar configurations')
+          .map((configuration) => configuration.maftagsc_sidecarconfigurationid.toLowerCase()),
+      );
+      return hasOtherEnabledFormOwner(
+        allBindings,
+        activeConfigurationIds,
+        formId,
+        configurationId,
+      );
+    }
     const changedBindings: Array<{ binding: Maftagsc_targetbindings; formId: string; handlerId: string }> = [];
     let processed = 0;
     for (const binding of bindings) {
@@ -271,7 +307,16 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       const formId = guid(binding.maftagsc_formid, 'Form ID');
       const form = data(await SystemformsService.get(formId, { select: ['formid', 'formxml', 'objecttypecode'] }), 'Read bound form');
       const mutation = mode === 'apply' ? addHandler(form.formxml, binding.maftagsc_handleruniqueid) : undefined;
-      const next = mutation?.value ?? removeHandler(form.formxml, binding.maftagsc_handleruniqueid);
+      if (mode === 'remove') {
+        data(await Bindings.update(binding.maftagsc_targetbindingid, {
+          maftagsc_enabled: false,
+          maftagsc_validationstate: VALIDATION.none,
+        }), 'Disable target binding');
+      }
+      const keepSharedHandler = mode === 'remove' && await hasLiveOtherOwner(formId);
+      const next = mutation?.value ?? (keepSharedHandler
+        ? form.formxml
+        : removeHandler(form.formxml, binding.maftagsc_handleruniqueid));
       if (next !== form.formxml) data(await SystemformsService.update(form.formid, { formxml: next }), 'Update bound form');
       changedBindings.push({ binding, formId, handlerId: mutation?.handlerId ?? binding.maftagsc_handleruniqueid });
       if (form.objecttypecode) tables.push(form.objecttypecode);
@@ -288,8 +333,6 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
           maftagsc_lastappliedfingerprint: await hash(readBack.formxml),
           maftagsc_validationstate: VALIDATION.pass,
         }), 'Update target binding');
-      } else {
-        data(await Bindings.update(binding.maftagsc_targetbindingid, { maftagsc_enabled: false, maftagsc_validationstate: VALIDATION.none }), 'Update target binding');
       }
     }
     return bindings;
@@ -339,8 +382,9 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       const tenantId = guid(draft.tenantId, 'Tenant ID');
       const clientId = guid(draft.publicClientApplicationId, 'Public-client Application ID');
       const environmentId = guid(draft.agent.environmentId, 'Environment ID');
-      const duplicates = data(await Configurations.getAll({ select: ['maftagsc_sidecarconfigurationid'], filter: `maftagsc_appid eq '${appId}'`, top: 1 }), 'Check app uniqueness');
-      if (duplicates.length) throw new Error('This Model-driven App already has a sidecar configuration.');
+      const enabledForApp = data(await Configurations.getAll({ select: ['maftagsc_sidecarconfigurationid'], filter: `maftagsc_appid eq '${appId}' and statecode eq 0`, top: 11 }), 'Check app sidecar limit');
+      if (enabledForApp.length >= 10) throw new Error('A Model-driven App can have at most 10 enabled sidecar configurations.');
+      await validateBindingSolutionName(draft.bindingSolutionUniqueName);
       const forms = appForms.get(draft.targetApp.appId) ?? await formsFor(draft.targetApp.id);
       const selectedForms = draft.tables
         .filter((item) => item.enabled)
@@ -351,10 +395,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
             .map((form) => ({ table, form }));
         });
       if (!selectedForms.length) throw new Error('Select at least one form under an enabled table.');
-      const bindingSolution = await ensureBindingSolution(draft.bindingSolutionUniqueName, appId);
-      let created: Maftagsc_sidecarconfigurations;
-      try {
-        created = data(await Configurations.create({
+      const created: Maftagsc_sidecarconfigurations = data(await Configurations.create({
           maftagsc_name: draft.name.trim(), maftagsc_appid: appId, maftagsc_appuniquename: draft.targetApp.uniqueName,
           maftagsc_appdisplayname: draft.targetApp.displayName, maftagsc_panetitle: draft.paneTitle.trim(), maftagsc_panewidth: draft.paneWidth,
           maftagsc_agentdisplayname: draft.agent.displayName, maftagsc_agentschemaname: draft.agent.schemaName,
@@ -362,9 +403,25 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
           maftagsc_publicclientapplicationid: clientId, maftagsc_environmentid: environmentId,
           maftagsc_bindingsolutionuniquename: draft.bindingSolutionUniqueName.trim(), maftagsc_autoenablenewtables: true,
           maftagsc_healthstate: HEALTH.none, maftagsc_lastoperationsummary: 'Deployment is in progress.', statecode: 0, statuscode: STATUS.draft,
-        }), 'Create configuration');
+      }), 'Create configuration');
+      const enabledAfterCreate = data(await Configurations.getAll({
+        select: ['maftagsc_sidecarconfigurationid'],
+        filter: `maftagsc_appid eq '${appId}' and statecode eq 0`,
+        top: 11,
+      }), 'Verify app sidecar limit');
+      if (enabledAfterCreate.length > 10) {
+        await Configurations.delete(created.maftagsc_sidecarconfigurationid);
+        throw new Error('A concurrent deployment reached the 10-sidecar limit. No sidecar was added.');
+      }
+      let bindingSolutionId: string;
+      try {
+        bindingSolutionId = await createBindingSolution(
+          draft.bindingSolutionUniqueName,
+          appId,
+          created.maftagsc_sidecarconfigurationid,
+        );
       } catch (error) {
-        if (bindingSolution.created) await SolutionsService.delete(bindingSolution.id).catch(() => undefined);
+        await Configurations.delete(created.maftagsc_sidecarconfigurationid).catch(() => undefined);
         throw error;
       }
       const addedHandlers = new Map<string, string>();
@@ -375,14 +432,18 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
         for (const { table, form } of selectedForms) {
           onProgress?.({ phase: 'forms', current: processed, total: selectedForms.length, label: `${table.displayName} — ${form.name}` });
           const formId = guid(form.formid, 'Form ID');
-          const mutation = addHandler(form.formxml, crypto.randomUUID());
-          if (mutation.value !== form.formxml) data(await SystemformsService.update(formId, { formxml: mutation.value }), 'Update target form');
+          const currentForm = data(
+            await SystemformsService.get(formId, { select: ['formid', 'formxml', 'objecttypecode'] }),
+            'Read current target form',
+          );
+          const mutation = addHandler(currentForm.formxml, crypto.randomUUID());
+          if (mutation.value !== currentForm.formxml) data(await SystemformsService.update(formId, { formxml: mutation.value }), 'Update target form');
           if (mutation.added) addedHandlers.set(formId, mutation.handlerId);
           await addSolutionComponent(draft.bindingSolutionUniqueName.trim(), formId, 60);
           const binding = data(await Bindings.create({
             maftagsc_name: `${table.displayName} - ${form.name}`, maftagsc_tablelogicalname: table.logicalName,
             maftagsc_tabledisplayname: table.displayName, maftagsc_formid: formId, maftagsc_formname: form.name,
-            maftagsc_enabled: true, maftagsc_handleruniqueid: mutation.handlerId, maftagsc_originalformfingerprint: await hash(form.formxml),
+            maftagsc_enabled: true, maftagsc_handleruniqueid: mutation.handlerId, maftagsc_originalformfingerprint: await hash(currentForm.formxml),
             maftagsc_lastappliedfingerprint: await hash(mutation.value), maftagsc_validationstate: VALIDATION.pass,
             'maftagsc_sidecarconfiguration@odata.bind': `/maftagsc_sidecarconfigurations(${created.maftagsc_sidecarconfigurationid})`, statecode: 0, statuscode: 1,
           }), 'Create binding'); createdBindings.push({ bindingId: binding.maftagsc_targetbindingid, formId }); tables.push(table.logicalName);
@@ -411,7 +472,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
         if (tables.length) await publishTables(tables).catch(() => undefined);
         await Promise.all(createdBindings.map(({ bindingId }) => Bindings.delete(bindingId).catch(() => undefined)));
         await Configurations.delete(created.maftagsc_sidecarconfigurationid).catch(() => undefined);
-        if (bindingSolution.created) await SolutionsService.delete(bindingSolution.id).catch(() => undefined);
+        await SolutionsService.delete(bindingSolutionId).catch(() => undefined);
         throw new Error(`Deployment failed and rollback was attempted: ${message(error)}`);
       }
     },
@@ -419,8 +480,37 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     async reconcile(id, onProgress) { const configurationId = guid(id, 'Configuration ID'); await mutate(configurationId, 'apply', onProgress); data(await Configurations.update(configurationId, { statecode: 0, statuscode: STATUS.deployed, maftagsc_healthstate: HEALTH.healthy, maftagsc_lastoperationsummary: 'Approved reconciliation completed.' }), 'Complete reconciliation'); return validate(configurationId); },
     async setEnabled(id, enabled, onProgress) {
       const configurationId = guid(id, 'Configuration ID');
+      if (enabled) {
+        const configuration = data(await Configurations.get(configurationId), 'Read sidecar configuration');
+        const enabledForApp = data(await Configurations.getAll({
+          select: ['maftagsc_sidecarconfigurationid'],
+          filter: `maftagsc_appid eq '${odataString(configuration.maftagsc_appid)}' and statecode eq 0 and maftagsc_sidecarconfigurationid ne ${configurationId}`,
+          top: 10,
+        }), 'Check app sidecar limit');
+        if (enabledForApp.length >= 10) {
+          throw new Error('A Model-driven App can have at most 10 enabled sidecar configurations.');
+        }
+      }
       await mutate(configurationId, enabled ? 'apply' : 'remove', onProgress);
       data(await Configurations.update(configurationId, { statecode: enabled ? 0 : 1, statuscode: enabled ? STATUS.deployed : STATUS.disabled, maftagsc_healthstate: enabled ? HEALTH.healthy : HEALTH.none, maftagsc_lastvalidatedat: new Date().toISOString(), maftagsc_lastoperationsummary: enabled ? 'Sidecar enabled.' : 'Sidecar disabled; configuration retained.' }), enabled ? 'Enable sidecar' : 'Disable sidecar');
+      if (enabled) {
+        const configuration = data(await Configurations.get(configurationId), 'Read enabled sidecar configuration');
+        const enabledAfterUpdate = data(await Configurations.getAll({
+          select: ['maftagsc_sidecarconfigurationid'],
+          filter: `maftagsc_appid eq '${odataString(configuration.maftagsc_appid)}' and statecode eq 0`,
+          top: 11,
+        }), 'Verify app sidecar limit');
+        if (enabledAfterUpdate.length > 10) {
+          data(await Configurations.update(configurationId, {
+            statecode: 1,
+            statuscode: STATUS.disabled,
+            maftagsc_healthstate: HEALTH.none,
+            maftagsc_lastoperationsummary: 'Enable was rolled back because a concurrent operation reached the 10-sidecar limit.',
+          }), 'Roll back sidecar enable');
+          await mutate(configurationId, 'remove', onProgress);
+          throw new Error('A concurrent enable reached the 10-sidecar limit. This sidecar remains disabled.');
+        }
+      }
       return enabled ? validate(configurationId) : map(data(await Configurations.get(configurationId), 'Read configuration'), await bindingsFor(configurationId));
     },
     async uninstall(id, onProgress) {
@@ -430,15 +520,34 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       onProgress?.({ phase: 'cleanup', current: 0, total: 1, label: 'Removing bindings and configuration' });
       await Promise.all(bindings.map((binding) => Bindings.delete(binding.maftagsc_targetbindingid)));
       await Configurations.delete(configurationId);
-      const ownershipMarker = `Agent Sidecar Target Binding for app ${guid(configuration.maftagsc_appid, 'Model-driven App ID')}`;
+      const ownershipMarker = bindingSolutionMarker(configuration.maftagsc_appid, configurationId);
+      const legacyOwnershipMarker = `Agent Sidecar Target Binding for app ${guid(configuration.maftagsc_appid, 'Model-driven App ID')}`;
       const publisherId = await sidecarPublisherId();
-      const solutions = data(await SolutionsService.getAll({
-        select: ['solutionid', 'description', '_publisherid_value'],
-        filter: `uniquename eq '${odataString(configuration.maftagsc_bindingsolutionuniquename)}' and ismanaged eq false`,
-        top: 1,
-      }), 'Find scoped Target Binding solution');
-      if (solutions[0]?.description === ownershipMarker && (solutions[0]._publisherid_value ?? '').toLowerCase() === publisherId.toLowerCase()) {
-        await SolutionsService.delete(solutions[0].solutionid);
+      const [solutionsResult, remainingOwnersResult] = await Promise.all([
+        SolutionsService.getAll({
+          select: ['solutionid', 'description', '_publisherid_value'],
+          filter: `uniquename eq '${odataString(configuration.maftagsc_bindingsolutionuniquename)}' and ismanaged eq false`,
+          top: 1,
+        }),
+        Configurations.getAll({
+          select: ['maftagsc_sidecarconfigurationid'],
+          filter: `maftagsc_bindingsolutionuniquename eq '${odataString(configuration.maftagsc_bindingsolutionuniquename)}'`,
+          top: 1,
+        }),
+      ]);
+      const solutions = data(solutionsResult, 'Find scoped Target Binding solution');
+      const remainingOwners = data(remainingOwnersResult, 'Check Target Binding solution owners');
+      const ownedSolution = solutions[0];
+      const markerIsOwned = ownedSolution?.description === ownershipMarker
+        || ownedSolution?.description === legacyOwnershipMarker;
+      if (
+        ownedSolution
+        &&
+        markerIsOwned
+        && remainingOwners.length === 0
+        && (ownedSolution._publisherid_value ?? '').toLowerCase() === publisherId.toLowerCase()
+      ) {
+        await SolutionsService.delete(ownedSolution.solutionid);
       }
       onProgress?.({ phase: 'cleanup', current: 1, total: 1, label: 'Removing bindings and configuration' });
     },

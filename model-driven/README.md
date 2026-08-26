@@ -8,7 +8,7 @@ The deployable Dataverse copies are created as web resources in the
 
 - HTML web resource: `maftagsc_/copilot/agentSidePane.html`
 - JavaScript web resource: `maftagsc_/copilot/agentSidePane.js`
-- Stable pane ID: `maftagsc_hr_management_app_guide`
+- Stable pane ID: `maftagsc_sidecar_<configuration-guid-without-dashes>`
 - Authentication: Microsoft Entra delegated authorization code flow with PKCE
 - Delegated scope: `https://api.powerplatform.com/CopilotStudio.Copilots.Invoke`
 - Agent client: Microsoft 365 Agents SDK `CopilotStudioClient`
@@ -23,16 +23,19 @@ The side pane uses five non-secret values: Application (client) ID, Directory
 and the Microsoft 365 Agents SDK connection string copied from the Web app
 channel. The connection string is passed to the SDK as `directConnectUrl`, so
 standard and GitHub Copilot harness agents use the runtime endpoint selected by
-Copilot Studio. The generic runtime resolves an enabled configuration by the
-current Model-driven App ID and fails closed when no unique match exists. The
+Copilot Studio. The generic launcher collects up to ten enabled configurations for the current
+Model-driven App, quarantines malformed or colliding records, and opens every
+configuration explicitly bound to the current form. Each iframe then resolves
+the exact configuration ID and verifies its app and derived pane ID. The
 current HR values remain in `hrSidecarBootstrap.ts` as a compatibility bridge.
-No client secret is created or shipped, and MSAL tokens use memory storage only.
+No client secret is created or shipped. Authentication request handshakes and
+popup names are namespaced by configuration ID and nonce.
 
 ## Build
 
 The maintained conversation source is `agentSidePane.ts`, the form launcher
 source is `agentSidePaneLauncher.ts`, and `agentSidePane.template.html`
-provides the accessible shell. Both TypeScript entries use the same app-keyed
+provides the accessible shell. Both TypeScript entries use the same configuration-aware
 configuration repository. `sidecarConversationRepository.ts` owns all Dataverse
 conversation-reference and activity access; the UI never writes these tables
 directly. Build and type-check them from the repository root:
@@ -47,7 +50,7 @@ The build bundles MSAL Browser and the Agents SDK directly into
 synchronizes both deployable solution projections. Do not edit either generated
 web resource directly.
 
-The app-keyed compatibility runtime was deployed in place to the existing
+The earlier app-keyed compatibility runtime was deployed in place to the existing
 `HRAgentSidecar` development solution on 2026-07-10 after explicit project-owner
 approval. Any later import or publish still requires target-environment
 confirmation and the repository's deployment safeguards.
@@ -83,3 +86,7 @@ Runtime users need the packaged **Agent Sidecar User** security role in addition
 to their normal model-driven-app role. It grants user-level create, read, write,
 delete, append, and append-to access to user-owned conversation rows, user-level
 activity access, and read-only access to sidecar configuration.
+
+Direct-list-first startup is intentionally out of scope. List analysis remains
+an explicit, user-initiated in-pane flow, and navigation never emits proactive
+or navigation activities.
