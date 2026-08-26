@@ -322,6 +322,33 @@ export class SidecarConversationRepository {
             hasUserMessage: conversation.hasUserMessage || draft.role === "user"
         };
     }
+
+    async updateOrigin(
+        conversation: SidecarConversationReference,
+        origin: SidecarConversationOrigin
+    ): Promise<SidecarConversationReference> {
+        const id = requireGuid(
+            conversation.id,
+            "sidecar_conversation_record_id_invalid"
+        );
+        await this.webApi.updateRecord(CONVERSATION_TABLE, id, {
+            maftagsc_originatingtable: boundedText(
+                origin.tableName,
+                MAX_TABLE_NAME_LENGTH
+            ),
+            maftagsc_originatingrecordid: normalizeGuid(origin.recordId),
+            maftagsc_originatingrecordname: boundedText(
+                origin.recordName,
+                MAX_TITLE_LENGTH
+            )
+        });
+        return {
+            ...conversation,
+            originatingTable: boundedText(origin.tableName, MAX_TABLE_NAME_LENGTH),
+            originatingRecordId: normalizeGuid(origin.recordId),
+            originatingRecordName: boundedText(origin.recordName, MAX_TITLE_LENGTH)
+        };
+    }
 }
 
 export class SidecarConversationSession {
@@ -330,11 +357,12 @@ export class SidecarConversationSession {
     private readonly seenActivityIds = new Set<string>();
     private readonly pending: SidecarConversationActivityDraft[] = [];
     private work: Promise<void> = Promise.resolve();
+    private originLocked = false;
 
     constructor(
         private readonly repository: SidecarConversationRepository,
         private readonly scope: SidecarConversationScope,
-        private readonly origin: SidecarConversationOrigin,
+        private origin: SidecarConversationOrigin,
         private readonly onReferenceChanged: (
             reference: SidecarConversationReference
         ) => void,
@@ -346,6 +374,7 @@ export class SidecarConversationSession {
         activities: readonly SidecarConversationActivity[]
     ): void {
         this.reference = reference;
+        this.originLocked = reference.hasUserMessage;
         this.sequence = activities.reduce(
             (highest, activity) => Math.max(highest, activity.sequence),
             0
@@ -381,6 +410,18 @@ export class SidecarConversationSession {
         return this.reference;
     }
 
+    lockOrigin(origin: SidecarConversationOrigin): void {
+        if (this.originLocked || this.reference?.hasUserMessage) {
+            return;
+        }
+        this.origin = {
+            tableName: boundedText(origin.tableName, MAX_TABLE_NAME_LENGTH),
+            recordId: normalizeGuid(origin.recordId),
+            recordName: boundedText(origin.recordName, MAX_TITLE_LENGTH)
+        };
+        this.originLocked = true;
+    }
+
     async waitForIdle(): Promise<void> {
         await this.work;
     }
@@ -412,6 +453,15 @@ export class SidecarConversationSession {
 
                 while (this.pending.length > 0) {
                     const activity = this.pending[0]!;
+                    if (
+                        !this.reference.hasUserMessage &&
+                        activity.role === "user"
+                    ) {
+                        this.reference = await this.repository.updateOrigin(
+                            this.reference,
+                            this.origin
+                        );
+                    }
                     const nextSequence = this.sequence + 1;
                     const title = this.reference.messageCount === 0 &&
                         activity.role === "user"

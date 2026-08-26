@@ -170,6 +170,30 @@ describe("SidecarConversationRepository", () => {
         expect(updated.hasUserMessage).toBe(true);
     });
 
+    it("updates the originating record before the first user message", async () => {
+        const { api, updateRecord } = createWebApi();
+        updateRecord.mockResolvedValue({});
+        const repository = new SidecarConversationRepository(api);
+
+        const updated = await repository.updateOrigin(createReference(), {
+            tableName: "contact",
+            recordId: "99999999-9999-4999-8999-999999999999",
+            recordName: "Rene Valdes"
+        });
+
+        expect(updateRecord).toHaveBeenCalledWith(
+            "maftagsc_sidecarconversation",
+            CONVERSATION_RECORD_ID,
+            {
+                maftagsc_originatingtable: "contact",
+                maftagsc_originatingrecordid:
+                    "99999999-9999-4999-8999-999999999999",
+                maftagsc_originatingrecordname: "Rene Valdes"
+            }
+        );
+        expect(updated.originatingRecordName).toBe("Rene Valdes");
+    });
+
     it("recovers when an activity was created before its parent metadata update failed", async () => {
         const { api, retrieveMultipleRecords, createRecord, updateRecord } = createWebApi();
         retrieveMultipleRecords.mockResolvedValue({
@@ -211,6 +235,19 @@ describe("SidecarConversationSession", () => {
     it("queues display activities until a real conversation ID exists and de-duplicates them", async () => {
         const repository = {
             createConversation: vi.fn().mockResolvedValue(createReference()),
+            updateOrigin: vi.fn().mockImplementation(async (
+                reference: SidecarConversationReference,
+                origin: {
+                    tableName: string;
+                    recordId: string | null;
+                    recordName: string;
+                }
+            ) => ({
+                ...reference,
+                originatingTable: origin.tableName,
+                originatingRecordId: origin.recordId,
+                originatingRecordName: origin.recordName
+            })),
             appendActivity: vi.fn().mockImplementation(async (
                 reference: SidecarConversationReference
             ) => ({
@@ -249,5 +286,81 @@ describe("SidecarConversationSession", () => {
         expect(repository.createConversation).toHaveBeenCalledTimes(1);
         expect(repository.appendActivity).toHaveBeenCalledTimes(1);
         expect(failed).not.toHaveBeenCalled();
+    });
+
+    it("re-origins a greeting-only conversation before its first user message", async () => {
+        const greetingReference = createReference({
+            originatingRecordId: "88888888-8888-4888-8888-888888888888",
+            originatingRecordName: "Bill Franklin"
+        });
+        const repository = {
+            updateOrigin: vi.fn().mockImplementation(async (
+                reference: SidecarConversationReference,
+                origin: {
+                    tableName: string;
+                    recordId: string | null;
+                    recordName: string;
+                }
+            ) => ({
+                ...reference,
+                originatingTable: origin.tableName,
+                originatingRecordId: origin.recordId,
+                originatingRecordName: origin.recordName
+            })),
+            appendActivity: vi.fn().mockImplementation(async (
+                reference: SidecarConversationReference
+            ) => ({
+                ...reference,
+                messageCount: reference.messageCount + 1,
+                hasUserMessage: true
+            }))
+        } as unknown as SidecarConversationRepository;
+        const session = new SidecarConversationSession(repository, {
+            ownerId: OWNER_ID,
+            configurationId: CONFIGURATION_ID,
+            appId: APP_ID,
+            agentSchemaName: "cr88d_insightsandactions_AChDbK"
+        }, {
+            tableName: "contact",
+            recordId: greetingReference.originatingRecordId,
+            recordName: greetingReference.originatingRecordName
+        }, vi.fn(), vi.fn());
+        session.restore(greetingReference, []);
+        session.lockOrigin({
+            tableName: "contact",
+            recordId: "99999999-9999-4999-8999-999999999999",
+            recordName: "Rene Valdes"
+        });
+        session.lockOrigin({
+            tableName: "contact",
+            recordId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            recordName: "Ignored second record"
+        });
+
+        session.observe({
+            activityId: ACTIVITY_ID,
+            role: "user",
+            activityType: "message",
+            text: "Help with this contact",
+            timestamp: "2026-08-24T20:01:00Z"
+        }, COPILOT_CONVERSATION_ID);
+        await session.waitForIdle();
+
+        expect(repository.updateOrigin).toHaveBeenCalledWith(
+            greetingReference,
+            {
+                tableName: "contact",
+                recordId: "99999999-9999-4999-8999-999999999999",
+                recordName: "Rene Valdes"
+            }
+        );
+        expect(repository.appendActivity).toHaveBeenCalledWith(
+            expect.objectContaining({
+                originatingRecordName: "Rene Valdes"
+            }),
+            expect.objectContaining({ role: "user" }),
+            1,
+            "Help with this contact"
+        );
     });
 });

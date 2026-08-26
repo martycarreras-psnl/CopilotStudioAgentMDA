@@ -42,7 +42,7 @@
             width: 100%;
             height: 100%;
             display: grid;
-            grid-template-rows: auto auto minmax(0, 1fr);
+            grid-template-rows: auto auto auto minmax(0, 1fr);
         }
 
         .chat-toolbar {
@@ -104,6 +104,38 @@
 
         #list-analysis-error[hidden] {
             display: none;
+        }
+
+        #conversation-context-warning {
+            margin: 0;
+            padding: 10px 12px;
+            color: #663c00;
+            background: #fff4ce;
+            border-bottom: 1px solid #e5c365;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        #conversation-context-warning[hidden] {
+            display: none;
+        }
+
+        #conversation-context-acknowledge {
+            margin-top: 8px;
+            min-height: 30px;
+            padding: 4px 10px;
+            border: 1px solid #8a4b08;
+            border-radius: 15px;
+            color: #663c00;
+            background: #ffffff;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        #conversation-context-acknowledge:focus-visible {
+            outline: 2px solid #007aff;
+            outline-offset: 2px;
         }
 
         #new-conversation {
@@ -341,6 +373,12 @@
                 title="Permanently delete the selected conversation"
                 disabled
             >Delete</button>
+        </div>
+        <div id="conversation-context-warning" role="alert" hidden>
+            <span id="conversation-context-warning-message"></span>
+            <button id="conversation-context-acknowledge" type="button">
+                Continue with current record
+            </button>
         </div>
         <p id="list-analysis-error" role="alert" hidden></p>
         <div id="webchat"></div>

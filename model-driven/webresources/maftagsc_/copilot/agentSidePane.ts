@@ -43,11 +43,17 @@ import {
     type ListAnalysisSelection
 } from "./sidecarListAnalysis";
 import { resolveOutgoingContext } from "./sidecarOutgoingContext";
+import {
+    getConversationContextMismatch,
+    type ConversationContextMismatch
+} from "./sidecarConversationContext";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
 const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
 const LIST_ANALYSIS_SELECTION_KEY = "maftagscListAnalysisSelection";
+const VALIDATED_CONTEXT_KEY = "maftagscValidatedContext";
 const AUTH_RESULT_PREFIX = "maftagsc.sidecar.authResult.";
+const PANE_VISIBILITY_SYNC_INTERVAL_MS = 500;
 
 interface LaunchContext {
     pageType: "entityrecord" | "entitylist";
@@ -105,6 +111,13 @@ interface HostXrm {
             options?: string
         ): Promise<Record<string, unknown>>;
     };
+    App?: {
+        sidePanes?: {
+            getPane(paneId: string): {
+                hidden: boolean;
+            } | undefined;
+        };
+    };
 }
 
 interface WebChatApi {
@@ -157,6 +170,9 @@ let recentConversations = new Map<string, SidecarConversationReference>();
 let deletedConversationIds = new Set<string>();
 let activeConversationGeneration = 0;
 let resetInProgress = false;
+let paneConfiguration: SidecarConfiguration | null = null;
+let conversationContextMismatch: ConversationContextMismatch | null = null;
+let acknowledgedConversationContextKey: string | null = null;
 
 function getRequiredElement<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
@@ -543,6 +559,95 @@ function setListAnalysisError(message?: string): void {
     error.hidden = !message;
 }
 
+function renderConversationContextWarning(
+    mismatch: ConversationContextMismatch | null
+): void {
+    conversationContextMismatch = mismatch;
+    const warning = getRequiredElement<HTMLElement>("conversation-context-warning");
+    const message = getRequiredElement<HTMLElement>("conversation-context-warning-message");
+    const acknowledge = getRequiredElement<HTMLButtonElement>(
+        "conversation-context-acknowledge"
+    );
+    const nextMessage = mismatch?.message ?? "";
+    const nextWarningHidden = !mismatch;
+    const nextAcknowledgeHidden =
+        !mismatch || acknowledgedConversationContextKey === mismatch.key;
+    if (warning.hidden !== nextWarningHidden) {
+        warning.hidden = nextWarningHidden;
+    }
+    if (message.textContent !== nextMessage) {
+        message.textContent = nextMessage;
+    }
+    if (acknowledge.hidden !== nextAcknowledgeHidden) {
+        acknowledge.hidden = nextAcknowledgeHidden;
+    }
+}
+
+function refreshConversationContextWarning(context: LaunchContext): void {
+    renderConversationContextWarning(
+        getConversationContextMismatch(
+            activeConversationReference?.hasUserMessage
+                ? activeConversationReference
+                : null,
+            context
+        )
+    );
+}
+
+function isCurrentPageBound(configuration: SidecarConfiguration): boolean | null {
+    try {
+        const hostXrm = getHostXrm();
+        const getPageContext = hostXrm?.Utility?.getPageContext;
+        if (!getPageContext) {
+            return null;
+        }
+        const input = getPageContext().input;
+        const pageType =
+            input?.pageType === "entityrecord" || input?.pageType === "entitylist"
+                ? input.pageType
+                : null;
+        if (!pageType) {
+            return false;
+        }
+        const entityName = String(input?.entityName ?? "").trim().toLowerCase();
+        if (!getEntityBinding(configuration, entityName)) {
+            return false;
+        }
+        if (pageType === "entitylist") {
+            return true;
+        }
+        const formId = normalizeGuid(
+            hostXrm?.Page?.ui?.formSelector?.getCurrentItem?.()?.getId?.()
+        );
+        return isFormBound(configuration, entityName, formId);
+    } catch {
+        return null;
+    }
+}
+
+function syncPaneVisibility(): void {
+    if (!paneConfiguration) {
+        return;
+    }
+    const hostXrm = getHostXrm();
+    const pane = hostXrm?.App?.sidePanes?.getPane(paneConfiguration.paneId);
+    const isBound = isCurrentPageBound(paneConfiguration);
+    if (pane && isBound !== null && pane.hidden === isBound) {
+        pane.hidden = !isBound;
+    }
+    if (isBound && activeConfiguration && activeContext) {
+        try {
+            refreshConversationContextWarning(
+                resolveContext(activeContext, activeConfiguration)
+            );
+        } catch {
+            renderConversationContextWarning(null);
+        }
+    } else if (isBound === false) {
+        renderConversationContextWarning(null);
+    }
+}
+
 function formatConversationOption(conversation: SidecarConversationReference): string {
     const timestamp = new Date(conversation.lastActivityOn);
     const dateLabel = Number.isNaN(timestamp.getTime())
@@ -899,6 +1004,39 @@ function createContextEnvelope(
     ].join("\n");
 }
 
+function parseValidatedContext(value: unknown): LaunchContext | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+    try {
+        const parsed = JSON.parse(value) as Partial<LaunchContext>;
+        const pageType =
+            parsed.pageType === "entityrecord" || parsed.pageType === "entitylist"
+                ? parsed.pageType
+                : null;
+        const entityName = String(parsed.entityName ?? "").trim().toLowerCase();
+        if (!pageType || !entityName) {
+            return null;
+        }
+        return {
+            pageType,
+            entityName,
+            formId: pageType === "entityrecord" ? normalizeGuid(parsed.formId) : null,
+            recordId: pageType === "entityrecord" ? normalizeGuid(parsed.recordId) : null,
+            recordName: String(parsed.recordName ?? "").slice(0, 200),
+            appId: normalizeGuid(parsed.appId),
+            roles: normalizeUserRoles(parsed.roles),
+            viewId: pageType === "entitylist" ? normalizeGuid(parsed.viewId) : null,
+            viewType: pageType === "entitylist" &&
+                (parsed.viewType === "savedquery" || parsed.viewType === "userquery")
+                ? parsed.viewType
+                : null
+        };
+    } catch {
+        return null;
+    }
+}
+
 function createContextStore(
     webChat: WebChatApi,
     persistence: SidecarConversationSession | null,
@@ -928,6 +1066,25 @@ function createContextStore(
         }
         if (outgoingContext?.ok) {
             setListAnalysisError();
+            const mismatch = getConversationContextMismatch(
+                activeConversationReference?.hasUserMessage
+                    ? activeConversationReference
+                    : null,
+                outgoingContext.context
+            );
+            renderConversationContextWarning(mismatch);
+            if (mismatch && acknowledgedConversationContextKey !== mismatch.key) {
+                window.setTimeout(() => {
+                    api.dispatch({
+                        type: "WEB_CHAT/SET_SEND_BOX",
+                        payload: { text: outgoingText }
+                    });
+                    getRequiredElement<HTMLButtonElement>(
+                        "conversation-context-acknowledge"
+                    ).focus();
+                }, SEND_BOX_RESTORE_DELAY_MS);
+                return action;
+            }
         }
         if (outgoingContext?.ok && !confirmedSelection) {
             const currentContext = outgoingContext.context;
@@ -978,6 +1135,23 @@ function createContextStore(
                     });
                 return action;
             }
+        }
+        if (outgoingContext?.ok) {
+            persistence?.lockOrigin({
+                tableName: outgoingContext.context.entityName,
+                recordId: outgoingContext.context.recordId,
+                recordName: outgoingContext.context.recordName
+            });
+            action = {
+                ...action,
+                payload: {
+                    ...action.payload,
+                    channelData: {
+                        ...action.payload?.channelData,
+                        [VALIDATED_CONTEXT_KEY]: JSON.stringify(outgoingContext.context)
+                    }
+                }
+            };
         }
 
         const activity = action.payload?.activity;
@@ -1145,6 +1319,9 @@ async function renderConversation(
         const originalText = activity.type === "message"
             ? activity.text?.trim()
             : undefined;
+        const validatedContext = parseValidatedContext(
+            activity.channelData?.[VALIDATED_CONTEXT_KEY]
+        );
         return from(resolveSidecarConfiguration(
             configuration.configurationId,
             configuration.appId,
@@ -1156,7 +1333,8 @@ async function renderConversation(
                     return postActivity(activity);
                 }
 
-                const currentContext = resolveContext(activeContext ?? context, configuration);
+                const currentContext = validatedContext ??
+                    resolveContext(activeContext ?? context, configuration);
                 activeContext = currentContext;
                 const requestedListAnalysisSelection = parseListAnalysisSelection(
                     activity.channelData?.[LIST_ANALYSIS_SELECTION_KEY]
@@ -1168,6 +1346,7 @@ async function renderConversation(
                     : null;
                 const forwardedChannelData = { ...activity.channelData };
                 delete forwardedChannelData[LIST_ANALYSIS_SELECTION_KEY];
+                delete forwardedChannelData[VALIDATED_CONTEXT_KEY];
 
                 return postActivity({
                     ...activity,
@@ -1238,6 +1417,8 @@ async function renderConversation(
     activeContext = context;
     activeConfiguration = configuration;
     activeConversationReference = resumeConversation ?? null;
+    acknowledgedConversationContextKey = null;
+    refreshConversationContextWarning(context);
     if (resumeConversation) {
         renderRecentConversationOptions(resumeConversation.id);
         setHistoryStatus(`Resumed ${resumeConversation.title}.`);
@@ -1427,6 +1608,8 @@ async function start(interactive: boolean, popup?: Window): Promise<void> {
 
     try {
         const { configuration, context } = await parseLaunchRequest();
+        paneConfiguration = configuration;
+        syncPaneVisibility();
         applyPaneTitle(configuration.paneTitle);
         const token = await acquireToken(interactive, configuration, popup);
         if (!token) {
@@ -1465,6 +1648,27 @@ function initialize(): void {
             void resumeConversation(select.value);
         }
     );
+    getRequiredElement<HTMLButtonElement>(
+        "conversation-context-acknowledge"
+    ).addEventListener("click", () => {
+        if (!conversationContextMismatch) {
+            return;
+        }
+        acknowledgedConversationContextKey = conversationContextMismatch.key;
+        renderConversationContextWarning(conversationContextMismatch);
+        window.requestAnimationFrame(() => {
+            document.querySelector<HTMLElement>(
+                "#webchat textarea, #webchat input"
+            )?.focus();
+        });
+    });
+    const visibilityTimer = window.setInterval(
+        syncPaneVisibility,
+        PANE_VISIBILITY_SYNC_INTERVAL_MS
+    );
+    window.addEventListener("unload", () => window.clearInterval(visibilityTimer), {
+        once: true
+    });
     void start(false);
 }
 
