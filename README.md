@@ -1,30 +1,90 @@
 # Agent Sidecar for Model-Driven Apps
 
-Agent Sidecar adds a persistent, context-aware Copilot Studio assistant to any Dataverse model-driven app. It appears as a collapsible side pane on the forms you choose, signs each user in with their own identity, and passes the live page and record context to your published agent — so answers are grounded in whatever screen the user is looking at.
+Agent Sidecar brings published Copilot Studio agents into Dataverse model-driven apps as persistent, context-aware assistants. Users stay inside the business application they already know while the agent receives the current page, table, record, list, and user-role context needed to provide relevant help.
 
-You stand it up by importing one solution and configuring it through an in-app wizard. There is no scripting to write and nothing to build; everything happens through solution management and the administration app.
+The core capability is delivered as one importable Power Platform solution. A System Administrator configures it through the included administration Code App, chooses where each assistant belongs, and manages its lifecycle without writing form scripts or building a custom host.
 
-## What's new
+## Why Agent Sidecar
 
-- **🆕 Refined administration experience.** The Sidecar Dashboard presents configured assistants with the same validated icon content users see in their model-driven apps. Guided setup uses a column-based application list, a compact in-flow choice summary, completed-step checkmarks, checkmarked operation accomplishments, and an editable tenant ID inferred from the signed-in Power Apps host.
-- **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
-- **Meaningful conversation history.** Greeting-only sessions stay out of **Recent conversations** until the user sends a message, so startup noise does not crowd out useful history.
-- **List-aware analysis.** On a model-driven list, requests to analyze or process records pause for an explicit **Current view** versus **All accessible records** choice, warn about large datasets, and attach the chosen view definition only to that confirmed request.
-- **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context, so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
-- **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
-- **Split-view-aware context.** When a model-driven list and its selected record form are visible together, the matching open form remains the authoritative context; a true list page still uses the explicit list-analysis flow.
-- **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
+Model-driven apps contain the records and processes where work happens, while Copilot Studio agents provide guidance, knowledge, and action. Agent Sidecar connects those experiences without creating another destination for users to visit.
 
-## What you get
+- **Help appears in the flow of work.** A branded, collapsible side pane initializes from an enabled form and stays available as users move through supported forms and lists.
+- **Every prompt carries current context.** The agent can distinguish a record from a list, understand split-view layouts, and tailor guidance using the signed-in user's Dataverse role names.
+- **Identity and permissions remain authoritative.** Delegated Microsoft Entra authentication means the agent operates as the signed-in user and remains subject to that user's existing access.
+- **Administrators control placement and lifecycle.** The administration app discovers available apps, forms, and published agents, then deploys and verifies the configuration through guided operations.
+- **Conversations remain useful over time.** Users can resume or delete their own saved conversations without mixing transcripts between assistants.
 
-- Up to **10 independently configured side panes in one app**, each keyed by its immutable configuration GUID and retaining its own agent, identity, conversation, consent, and dialog state.
-- **Recent conversation resume** backed by user-owned Dataverse rows, including local transcript replay and Agents SDK server-context continuation.
-- **Live context**: the current table, record, and screen are sent to your agent before every message and updated automatically as the user moves around the app.
-- **Delegated authentication** (Microsoft Entra, authorization code with PKCE): the agent answers as the signed-in user, so knowledge stays subject to that user's existing permissions. No secrets live in the browser.
-- An **Agent Sidecar administration app** — a Power Apps Code App, restricted to System Administrators — that discovers your apps, tables, and forms and deploys, validates, reconciles, or removes the sidecar with automatic rollback.
-- A **reference implementation** (HR Management) you can deploy if you want to see the sidecar working end to end before wiring up your own app.
+## Product capabilities
 
-## Get rolling
+### Context-aware assistance inside model-driven apps
+
+- The sidecar opens as a persistent, collapsed pane on the main forms selected by an administrator.
+- Immediately before each user prompt or explicit new-conversation action, the runtime resolves the live page type, table, record ID, record name, app ID, and signed-in user's Dataverse security-role names.
+- Navigation updates context locally but does not contact the agent. The agent acts only after an explicit user action.
+- In model-driven split view, a matching visible record form takes precedence over the adjacent list. A standalone list remains list context.
+- Record names are accepted only when the table and normalized record ID match, preventing a name from the previously viewed record from leaking into the next prompt.
+- When the user reaches a table that is not enabled for the configuration, the side-pane rail collapses without deleting the pane or its conversation state.
+- Role names help the agent adjust tone and guidance; they never grant access or replace Dataverse authorization.
+- The accessible, Messages-inspired chat experience presents clear user and assistant turns, connection status, sign-in, recent-conversation, and delete controls within the pane.
+- A selected main form must initialize the sidecar before it can continue into a list; opening the app directly on a list does not initialize the pane.
+
+### Multiple independent assistants in one app
+
+- A model-driven app can host up to **10 enabled sidecars**.
+- Each sidecar is identified by its immutable configuration GUID rather than by app ID, so multiple assistants can target the same app and even the same form.
+- Agent connection, authentication, active conversation, recent history, consent handling, blocked prompts, and dialog state remain local to each pane.
+- Overlapping form bindings share one reference-counted dispatcher, allowing one sidecar to be disabled, edited, or removed without interrupting another sidecar that uses the same form.
+- Invalid or colliding configurations are quarantined independently instead of preventing valid sidecars from loading.
+
+### Durable, user-owned conversations
+
+- The runtime captures the real Microsoft 365 Agents SDK conversation ID and stores display-safe user and assistant activities in Dataverse.
+- **Recent conversations** resumes the agent's server-side context and replays the corresponding local transcript.
+- Conversation history is scoped by signed-in owner, sidecar configuration, model-driven app, and agent schema, preventing cross-user and cross-pane mixing.
+- Greeting-only sessions remain out of **Recent conversations** until the user sends a message.
+- Resuming a conversation on a different record produces an orientation warning rather than silently treating the old record as current.
+- Users can permanently delete a saved conversation and its activities after confirmation. Deleting the active conversation immediately starts a clean session.
+
+### Explicit scope for list analysis
+
+- On a supported list, requests to analyze or process records pause before the prompt is sent.
+- The user chooses **Current view (all matching rows)** or **All accessible records** and sees a warning about potentially large result sets.
+- Current-view analysis includes the bounded view definition and identifies it as untrusted query data, not agent instructions.
+- All-record analysis preserves Dataverse security and does not silently inherit the current view's filter.
+- Canceling the scope dialog cancels the prompt. No list details are sent without the user's confirmed choice.
+
+### Delegated identity and controlled consent
+
+- The browser uses Microsoft Entra authorization code flow with PKCE and requests only the delegated `CopilotStudio.Copilots.Invoke` scope.
+- No client secret is created, shipped, or stored in the browser.
+- Standard Copilot Studio and GitHub Copilot harness agents use their supported Agents SDK endpoints.
+- Silent sign-in is attempted when possible, with an explicit **Sign in** action when interaction is required.
+- Repeated submission of the same connector-consent decision is deduplicated.
+- Distinct MCP write-consent requests remain distinct and are never automatically approved.
+
+### Guided administration
+
+- The **Sidecar Dashboard** gives administrators a portfolio view of configured assistants, deployment state, health, target app, and enabled tables.
+- Each dashboard card displays the validated agent, uploaded, or packaged default icon configured for that pane, matching the icon users see in the model-driven app.
+- The creation wizard presents model-driven apps in a readable table, defaults each selected table to its **Information** main form, and allows exact per-form selection.
+- Published Copilot Studio agents are discovered from the current environment. The app infers standard versus GitHub Copilot harness, generates the cloud-aware endpoint, and revalidates the selected agent before deployment.
+- Tenant ID and Dataverse organization URL are inferred from the signed-in Power Apps host when available; tenant ID remains editable.
+- Administrators can use the selected agent's icon, upload a validated PNG or JPEG, or retain the packaged default icon.
+- Pane title and width are configurable during setup, with the title defaulted from the selected application.
+- A progressive review experience keeps current choices in the main workflow, and checkmarks distinguish completed setup steps and confirmed operation accomplishments from pending work.
+
+### Safe lifecycle management
+
+- **Health validation** checks the live form bindings and reports healthy, warning, or critical states.
+- **Drift review** requires explicit administrator approval before reconciliation changes live metadata.
+- Placement and appearance can be edited in place without changing configuration identity, pane identity, target app, agent connection, Entra identity, binding solution, or conversation history.
+- The settings editor uses a focused table-and-form workspace and explains placement updates, publishing, verification, and rollback while a save is running.
+- Edits rediscover the app's current forms, expose unavailable selections, require at least one available form, and reject stale or concurrent changes.
+- New form ownership is added before old ownership is removed. Configuration-owned replacement icons are published and verified before the previous icon is deleted.
+- Deployment and editing include read-back verification and compensating rollback that leaves unrelated form XML untouched.
+- Administrators can disable and re-enable a sidecar without deleting its configuration, reconcile approved drift, or uninstall only the selected sidecar.
+
+## Get started
 
 Everything below is done through **solution import** and the **administration app** — no command line required.
 
@@ -58,11 +118,11 @@ After deployment, the overview groups information by purpose and keeps each acti
 
 ### 5. Use it
 
-Open a form in your app. The sidecar shows as a collapsed icon; expand it, sign in once, and ask questions about the current record. As users navigate, the assistant follows the record they are on.
+Open a configured form in your app. The sidecar appears as its configured collapsed icon; expand it, sign in when prompted, and ask a question about the current record. The pane preserves the conversation as the user navigates, resolves the latest supported context for each prompt, and collapses on unsupported tables.
 
 ## Reference implementation: HR Management (optional)
 
-If you don't have a model-driven app to try this on, deploy the included **HR Management** reference. It is a complete example app — a Dataverse HR schema (benefits, time off, expenses), seven form-bound sidecars, a **HR Mgmt Classic** Copilot Studio agent, and a full knowledge library — that shows the sidecar in context. It is a demonstration, not a requirement for using the sidecar with your own app.
+If you don't have a model-driven app to try this on, deploy the included **HR Management** reference. It is a complete example app — a Dataverse HR schema for benefits, time off, and expenses; seven supported form surfaces; a **HR Mgmt Classic** Copilot Studio agent; and a full knowledge library — that shows one sidecar working across a business application. It is a demonstration, not a requirement for using the sidecar with your own app.
 
 - Reference solution source: [solution](solution) (`HRAgentSidecar`)
 - Knowledge library: [docs/entity-help](docs/entity-help) and [docs/user-guides](docs/user-guides)
@@ -79,7 +139,7 @@ flowchart LR
 		Form -->|OnLoad| Launcher[JavaScript launcher<br/>agentSidePane.js]
 		Launcher -->|create or reuse stable pane| Pane[Persistent side pane<br/>Xrm.App.sidePanes]
 		Pane --> Host[Bundled HTML host<br/>agentSidePane.html]
-		MDA -->|live page and record context| Host
+		MDA -->|live page, record, list,<br/>and role context| Host
 		MDA --> Data[(Your tables and<br/>platform security)]
 		Host --> History[(User-owned conversation<br/>references and display activities)]
 	end
@@ -104,17 +164,22 @@ sequenceDiagram
 	participant A as Agents SDK client
 	participant C as Copilot Studio
 	participant K as Knowledge source
+	participant H as Dataverse conversation history
 
 	F->>P: OnLoad creates pane collapsed, or reuses it
 	U->>P: Opens library icon and sends a message
-	P->>F: Resolve current page, table, record ID, and record name
-	P->>P: Validate and bound the context
+	P->>F: Resolve current page, table, record, list, and user roles
+	P->>P: Corroborate and bound the context
+	opt List analysis request
+		P->>U: Confirm current view or all accessible records
+		U->>P: Select scope or cancel
+	end
 	P->>A: Add trusted context envelope to the message
 	A->>C: Send message with delegated user token
 	C->>K: Retrieve only knowledge the user may access
 	K-->>C: Authorized grounding results
 	C-->>A: Stream response activities
-	P->>History: Save conversation ID and display-safe activities
+	P->>H: Save conversation ID and display-safe activities
 	A-->>P: Render through Web Chat
 	P-->>U: Contextual answer for the current screen
 ```
@@ -125,15 +190,15 @@ sequenceDiagram
 |---|---|
 | **Your model-driven app** | Provides the navigation shell, Dataverse forms, authenticated Power Platform session, and current page context. Your existing app is used as-is — nothing is recreated. |
 | **Form OnLoad handler** | The administration app registers a handler on each form you select, so the pane loads with that form. |
-| **JavaScript launcher** | Resolves every valid enabled configuration bound to the current form, orders them by pane title then configuration ID, and creates or reuses each configuration-keyed pane. Malformed and colliding records are quarantined independently. |
-| **Persistent side pane** | Keyed by immutable configuration GUID, it starts collapsed and preserves only its own active conversation as the user navigates between records. |
-| **HTML host and client** | Hosts Web Chat, signs the user in, creates or resumes the Agents SDK connection, keeps context current, persists display-safe activities, and replays selected transcripts. |
+| **JavaScript launcher** | Resolves every valid enabled configuration bound to the current form, orders them by pane title then configuration ID, and creates or reuses each configuration-keyed pane. It shares form dispatchers safely and quarantines malformed or colliding records independently. |
+| **Persistent side pane** | Keyed by immutable configuration GUID, it starts collapsed and preserves only its own active conversation, consent state, and dialogs as the user navigates. Unsupported tables collapse the pane rail without destroying that state. |
+| **HTML host and client** | Hosts Web Chat, signs the user in, creates or resumes the Agents SDK connection, resolves record or list context for each explicit prompt, persists display-safe activities, replays selected transcripts, and deduplicates repeated decisions for the same connector-consent request. |
 | **Conversation tables** | User-owned `maftagsc_sidecarconversation` and `maftagsc_sidecaractivity` rows provide recent-conversation discovery and transcript replay without storing tokens, trusted context envelopes, or connector payloads. |
 | **Microsoft Entra app registration** | Authenticates the signed-in user with authorization code + PKCE and requests only `https://api.powerplatform.com/CopilotStudio.Copilots.Invoke`. No browser client secret exists. |
 | **Microsoft 365 Agents SDK** | `CopilotStudioClient` uses the Web app channel connection string as its direct endpoint with the delegated user token. |
 | **Your Copilot Studio agent** | Interprets the question and uses the supplied screen context to select relevant guidance from its knowledge. |
 | **Agent Sidecar Core solution** | Packages the sidecar tables, web resources, and the administration app. Import it to bring the whole capability into an environment. |
-| **Administration app** | The System Administrator experience for deploying, validating, reconciling, and removing sidecars. Built as a Power Apps Code App and shipped inside the Core solution. |
+| **Administration app** | The System Administrator experience for discovering apps and published agents, deploying sidecars, editing placement and appearance, validating health, reconciling approved drift, disabling or re-enabling configurations, and uninstalling a selected sidecar. Built as a Power Apps Code App and shipped inside the Core solution. |
 
 ### Multiple-sidecar design principles
 
@@ -158,10 +223,15 @@ The context includes:
 | `recordId` | Current form context | Identifies the current record without treating the identifier as knowledge. |
 | `recordName` | Matching form primary attribute | Gives the user a friendly orientation after table and record ID are verified. |
 | `appId` | Current app properties | Confirms the model-driven app context when available. |
+| `roles` | Signed-in user's Dataverse role collection | Helps the agent tailor tone and guidance; never grants access. |
+| List view identity | Host page context | Identifies the current saved or personal view when available. |
+| Confirmed list scope | Explicit in-pane user choice | Adds either a bounded current-view FetchXML definition or an all-accessible-records instruction to that request only. |
 
 A trusted, bounded context envelope accompanies every outbound user message. Context is part of the real user activity rather than a separate event, so the agent receives one input and produces one conversational turn.
 
 The primary record name is accepted only when the form's table and normalized record ID match the current page context, so a record name from the previously viewed screen never leaks into the next question.
+
+When list and record surfaces are visible together, the pane uses record context only if the stored launcher context and the visible form agree on table, normalized record ID, and form ID. This protects the selected record experience in split view without reviving stale record context on a true list.
 
 Selecting **New conversation** closes the current Agents SDK connection, clears the visible transcript, resolves the page open at that moment, and creates a fresh conversation without forcing another sign-in. The previous conversation remains available under **Recent conversations**. Selecting a recent conversation recreates the connection with its saved Agents SDK `conversationId` and replays its stored display activities; it does not send page context until the user submits another prompt.
 
@@ -178,6 +248,7 @@ The side pane preserves the user's identity end to end:
 3. `CopilotStudioClient` sends the delegated token to Copilot Studio.
 4. The agent accesses its knowledge as that user, so the user's existing permissions remain authoritative.
 5. Any live Dataverse reads remain subject to table, row, and field security.
+6. Dataverse security-role names may shape the response but do not expand the user's permissions.
 
 Access tokens are handled by MSAL and are not written to URLs, logs, source files, or solution configuration. Application ID, tenant ID, environment ID, and agent schema name are identifiers, not secrets.
 
