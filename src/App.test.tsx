@@ -91,14 +91,34 @@ describe('Agent Sidecar Administration', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit placement' }));
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Refine placement and appearance' })).toBeTruthy();
-    expect(screen.getByText(/app, agent connection, pane identity, Entra identity/)).toBeTruthy();
-    expect((await screen.findByRole('radio', { name: 'Keep the current icon' }) as HTMLInputElement).checked).toBe(true);
-    expect(screen.getByText(/\d+ forms? selected/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Edit sidecar settings' })).toBeTruthy();
+    expect(screen.getByText(/Sidecar identity and conversation history stay unchanged/)).toBeTruthy();
+    expect((await screen.findByRole('tab', { name: /Placement/ })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('navigation', { name: 'Available tables' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /forms$/ })).toBeTruthy();
+    expect(screen.queryByText('Customer profile cases')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Keep the current icon' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Position/ }));
+    expect(screen.getByRole('region', { name: 'Position forms' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Appearance' }));
+    expect(screen.getByText('Sidecar icon')).toBeTruthy();
+    expect((screen.getByRole('radio', { name: 'Keep the current icon' }) as HTMLInputElement).checked).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await screen.findAllByText('Tables, forms, and icon updated in place.')).length).toBeGreaterThan(0);
     expect(screen.getByText('cr0b1_HRMgmtClassic')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit placement' }));
+    expect((await screen.findByRole('tab', { name: /Placement/ })).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('opens appearance directly from the contextual action', async () => {
+    render(<App />, { initialRoute: '/sidecars/sidecar-hr-management' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Change icon' }));
+
+    expect(await screen.findByRole('heading', { name: 'Edit sidecar settings' })).toBeTruthy();
+    expect((await screen.findByRole('tab', { name: 'Appearance' })).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('CURRENT ICON')).toBeTruthy();
   });
 });

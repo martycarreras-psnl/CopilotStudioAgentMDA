@@ -228,6 +228,7 @@ export function SidecarDetails({
               </div>
               <SidecarEditorDialog
                 triggerLabel="Edit placement"
+                initialSection="placement"
                 configurationName={configuration.name}
                 currentIconSource={configuration.iconSource}
                 currentIconContent={configuration.iconContent}
@@ -263,6 +264,7 @@ export function SidecarDetails({
               </div>
               <SidecarEditorDialog
                 triggerLabel="Change icon"
+                initialSection="appearance"
                 configurationName={configuration.name}
                 currentIconSource={configuration.iconSource}
                 currentIconContent={configuration.iconContent}
