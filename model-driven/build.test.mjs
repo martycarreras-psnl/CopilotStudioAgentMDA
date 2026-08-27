@@ -342,6 +342,18 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         .join("\n");
     assert.match(packagedCodeApp, /maftagsc_iconwebresourcename/);
     assert.match(packagedCodeApp, /Copilot Studio agent logo/);
+
+    const codeAppPackageUris = [
+        ...customizations.matchAll(/<CodeAppPackageUri>([^<]+)<\/CodeAppPackageUri>/g)
+    ].map((match) =>
+        match[1]
+            .replace(/^\//, "")
+            .replace(/_ContentType_(?:application\/javascript|text\/html|text\/css)$/, "")
+    );
+    assert.ok(codeAppPackageUris.length > 0, "Code App package metadata is missing");
+    for (const packageUri of codeAppPackageUris) {
+        assert.ok(entries.has(packageUri), `Code App package file is missing: ${packageUri}`);
+    }
 });
 
 test("authentication redirect completes sign-in via a same-origin localStorage handshake", async () => {
