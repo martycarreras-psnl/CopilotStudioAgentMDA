@@ -61,6 +61,9 @@ describe('Agent Sidecar Administration', () => {
     fireEvent.click(manageButtons[0]);
     expect(await screen.findByRole('heading', { name: 'HR Management App Guide' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Health validation' })).toBeTruthy();
+    expect(screen.getByTitle('maftagsc_HRManagement')).toBeTruthy();
+    expect(screen.getByTitle('cr0b1_HRMgmtClassic')).toBeTruthy();
+    expect(screen.getByTitle('HRAgentSidecarBinding')).toBeTruthy();
     await waitFor(() => expect(screen.getByText(/Last validated:/)).toBeTruthy());
   });
 

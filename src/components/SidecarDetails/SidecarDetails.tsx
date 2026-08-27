@@ -67,7 +67,9 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow2,
   },
   facts: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: tokens.spacingHorizontalL, '@media (max-width: 520px)': { gridTemplateColumns: '1fr' } },
-  fact: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  fact: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS, minWidth: 0 },
+  technicalFactWide: { gridColumn: '1 / -1' },
+  technicalValue: { minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word' },
   muted: { color: tokens.colorNeutralForeground2 },
   cardHeader: {
     display: 'flex',
@@ -321,10 +323,10 @@ export function SidecarDetails({
           <Card className={styles.card}>
             <Title3>Technical details</Title3>
             <div className={styles.facts}>
-              <div className={styles.fact}><Text size={200} className={styles.muted}>App unique name</Text><Text>{configuration.appUniqueName}</Text></div>
+              <div className={styles.fact}><Text size={200} className={styles.muted}>App unique name</Text><Text className={styles.technicalValue} title={configuration.appUniqueName}>{configuration.appUniqueName}</Text></div>
               <div className={styles.fact}><Text size={200} className={styles.muted}>Pane width</Text><Text>{configuration.paneWidth}px</Text></div>
-              <div className={styles.fact}><Text size={200} className={styles.muted}>Agent schema</Text><Text>{configuration.agentSchemaName}</Text></div>
-              <div className={styles.fact}><Text size={200} className={styles.muted}>Binding solution</Text><Text>{configuration.bindingSolutionUniqueName}</Text></div>
+              <div className={mergeClasses(styles.fact, styles.technicalFactWide)}><Text size={200} className={styles.muted}>Agent schema</Text><Text className={styles.technicalValue} title={configuration.agentSchemaName}>{configuration.agentSchemaName}</Text></div>
+              <div className={mergeClasses(styles.fact, styles.technicalFactWide)}><Text size={200} className={styles.muted}>Binding solution</Text><Text className={styles.technicalValue} title={configuration.bindingSolutionUniqueName}>{configuration.bindingSolutionUniqueName}</Text></div>
             </div>
           </Card>
           <Card className={mergeClasses(styles.card, styles.danger)}>
