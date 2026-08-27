@@ -123,19 +123,12 @@ export async function inspectSidecarIconBase64(
   };
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('The image could not be decoded.'));
-    };
-    image.src = url;
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('The image could not be decoded.'));
+    image.src = dataUrl;
   });
 }
 
@@ -168,7 +161,9 @@ export async function normalizeUploadedSidecarIcon(
   }
   validateDimensions(inspected.width, inspected.height);
 
-  const image = await loadImage(file);
+  const image = await loadImage(
+    `data:${inspected.mimeType};base64,${bytesToBase64(original)}`,
+  );
   const canvas = document.createElement('canvas');
   canvas.width = inspected.width;
   canvas.height = inspected.height;

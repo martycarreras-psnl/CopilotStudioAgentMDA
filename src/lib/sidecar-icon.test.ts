@@ -1,5 +1,6 @@
 import {
   inspectSidecarIconBase64,
+  normalizeUploadedSidecarIcon,
   SIDECAR_ICON_MAX_BYTES,
   sidecarIconWebResourceName,
 } from '@/lib/sidecar-icon';
@@ -73,5 +74,61 @@ describe('sidecar icon validation', () => {
       256,
       SIDECAR_ICON_MAX_BYTES,
     ))).rejects.toThrow('256 KB or smaller');
+  });
+
+  it('decodes uploads through a CSP-compatible data URL', async () => {
+    const pngBase64 = png(128, 128);
+    const bytes = Uint8Array.from(atob(pngBase64), (character) => character.charCodeAt(0));
+    const file = {
+      type: 'image/png',
+      size: bytes.byteLength,
+      arrayBuffer: async () => bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ),
+    } as File;
+    let imageSource = '';
+    const OriginalImage = globalThis.Image;
+    const createElement = vi.spyOn(document, 'createElement');
+
+    class TestImage {
+      onload?: () => void;
+      onerror?: () => void;
+
+      set src(value: string) {
+        imageSource = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    createElement.mockImplementation((tagName: string) => {
+      if (tagName !== 'canvas') {
+        return document.createElement(tagName);
+      }
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage: vi.fn() }),
+        toBlob: (callback: BlobCallback) => callback({
+          arrayBuffer: async () => bytes.buffer.slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength,
+          ),
+        } as Blob),
+      } as unknown as HTMLCanvasElement;
+    });
+    globalThis.Image = TestImage as unknown as typeof Image;
+
+    try {
+      await expect(normalizeUploadedSidecarIcon(file)).resolves.toMatchObject({
+        mimeType: 'image/png',
+        width: 128,
+        height: 128,
+      });
+      expect(imageSource).toBe(`data:image/png;base64,${pngBase64}`);
+    } finally {
+      globalThis.Image = OriginalImage;
+      createElement.mockRestore();
+    }
   });
 });
