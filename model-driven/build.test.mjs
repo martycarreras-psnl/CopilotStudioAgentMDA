@@ -295,6 +295,10 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(customizations, /maftagsc_iconwebresourcename/);
     assert.match(customizations, /maftagsc_iconcontenthash/);
     assert.match(customizations, /maftagsc_iconmimetype/);
+    assert.doesNotMatch(
+        customizations,
+        /<AppVersion>2026-08-26T23:29:00Z<\/AppVersion>/
+    );
     assert.match(
         customizations,
         /"webresources":\{"entitySetName":"webresourceset","logicalName":"webresource"\}/
