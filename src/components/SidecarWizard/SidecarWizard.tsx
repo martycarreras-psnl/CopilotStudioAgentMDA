@@ -13,10 +13,15 @@ import {
   Option,
   SpinButton,
   Spinner,
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
   Text,
   Title1,
   Title2,
-  Title3,
   makeStyles,
   mergeClasses,
   tokens,
@@ -29,9 +34,7 @@ import {
   ChevronDownRegular,
   ChevronRightRegular,
   CircleRegular,
-  DatabaseRegular,
   SearchRegular,
-  ShieldKeyholeRegular,
 } from '@fluentui/react-icons';
 import type {
   DeploymentImpact,
@@ -150,7 +153,7 @@ const useStyles = makeStyles({
   },
   stepText: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   muted: { color: tokens.colorNeutralForeground2 },
-  content: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: tokens.spacingHorizontalXL, alignItems: 'start', '@media (max-width: 900px)': { gridTemplateColumns: '1fr' } },
+  content: { display: 'block' },
   panel: {
     padding: tokens.spacingHorizontalXL,
     gap: tokens.spacingVerticalL,
@@ -159,10 +162,15 @@ const useStyles = makeStyles({
   },
   stack: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   sectionIntro: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
-  appGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: tokens.spacingHorizontalM },
-  appCard: { padding: tokens.spacingHorizontalM, cursor: 'pointer', minHeight: '130px', position: 'relative', border: `1px solid ${tokens.colorNeutralStroke1}` },
-  selectedCard: { outline: `2px solid ${tokens.colorBrandStroke1}`, backgroundColor: tokens.colorBrandBackground2 },
-  selectedIcon: { color: tokens.colorBrandForeground1, position: 'absolute', top: tokens.spacingVerticalS, right: tokens.spacingHorizontalS },
+  appTableFrame: {
+    overflowX: 'auto',
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+  },
+  appTable: { minWidth: '760px' },
+  appName: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  selectedRow: { backgroundColor: tokens.colorBrandBackground2 },
+  appAction: { textAlign: 'right' },
   tableRow: { display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: tokens.spacingHorizontalM, paddingBlock: tokens.spacingVerticalS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
   fields: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: tokens.spacingHorizontalM, '@media (max-width: 650px)': { gridTemplateColumns: '1fr' } },
   tableHeadRow: { display: 'grid', gridTemplateColumns: 'auto 1fr auto', alignItems: 'center', gap: tokens.spacingHorizontalS, paddingBlock: tokens.spacingVerticalS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
@@ -171,10 +179,24 @@ const useStyles = makeStyles({
   formRow: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS },
   full: { gridColumnStart: 1, gridColumnEnd: 3, '@media (max-width: 650px)': { gridColumnEnd: 2 } },
   actions: { display: 'flex', justifyContent: 'space-between', gap: tokens.spacingHorizontalM },
-  summary: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, position: 'sticky', top: '80px', '@media (max-width: 900px)': { position: 'static' } },
-  summaryItem: { display: 'grid', gridTemplateColumns: '20px 1fr', alignItems: 'start', gap: tokens.spacingHorizontalS },
+  choiceStrip: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+    gap: tokens.spacingHorizontalS,
+    padding: tokens.spacingHorizontalM,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground1,
+    '@media (max-width: 760px)': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+  },
+  summaryItem: {
+    display: 'grid',
+    gridTemplateColumns: '20px minmax(0, 1fr)',
+    alignItems: 'start',
+    gap: tokens.spacingHorizontalS,
+    padding: tokens.spacingHorizontalS,
+  },
   summaryIcon: { color: tokens.colorPaletteGreenForeground1, marginTop: '2px' },
-  summaryPending: { color: tokens.colorNeutralForeground3, marginTop: '2px' },
   impact: { padding: tokens.spacingHorizontalM, gap: tokens.spacingVerticalXS },
   surface: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   tableToolbar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap' },
@@ -403,6 +425,25 @@ export function SidecarWizard({
         ))}
       </div>
 
+      <section className={styles.choiceStrip} aria-label="Current configuration choices">
+        <div className={styles.summaryItem}>
+          {targetApp ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.muted} />}
+          <span><Text size={200} className={styles.muted}>Application</Text><br /><Text weight="semibold">{targetApp?.displayName ?? 'Choose an app'}</Text></span>
+        </div>
+        <div className={styles.summaryItem}>
+          {enabledTableCount ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.muted} />}
+          <span><Text size={200} className={styles.muted}>Placement</Text><br /><Text weight="semibold">{enabledTableCount ? `${enabledTableCount} tables · ${enabledFormCount} forms` : 'Choose forms'}</Text></span>
+        </div>
+        <div className={styles.summaryItem}>
+          {agent ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.muted} />}
+          <span><Text size={200} className={styles.muted}>Published agent</Text><br /><Text weight="semibold">{agent?.displayName ?? 'Choose an agent'}</Text></span>
+        </div>
+        <div className={styles.summaryItem}>
+          <CheckmarkCircleFilled className={styles.summaryIcon} />
+          <span><Text size={200} className={styles.muted}>Icon</Text><br /><Text weight="semibold">{icon.source === 'agent' ? 'Agent logo' : icon.source === 'uploaded' ? 'Custom logo' : 'Agent Sidecar default'}</Text></span>
+        </div>
+      </section>
+
       {(localError || error) && <MessageBar intent="error"><MessageBarBody><MessageBarTitle>Action needed</MessageBarTitle>{localError ?? error}</MessageBarBody></MessageBar>}
 
       <div className={styles.content}>
@@ -411,21 +452,49 @@ export function SidecarWizard({
             <div className={styles.stack}>
               <div className={styles.sectionIntro}><Title2 as="h2">Select application</Title2><Text className={styles.muted}>Eligible Model-driven Apps are discovered from the current environment.</Text></div>
               {appsLoading ? <Spinner label="Discovering Model-driven Apps" /> : (
-                <div className={styles.appGrid}>
-                  {apps.map((app) => (
-                    <Card
-                      key={app.id}
-                      className={mergeClasses(styles.appCard, targetApp?.id === app.id && styles.selectedCard)}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={targetApp?.id === app.id}
-                      onClick={() => selectApp(app)}
-                      onKeyDown={(event) => event.key === 'Enter' && selectApp(app)}
-                    >
-                      {targetApp?.id === app.id && <CheckmarkCircleFilled className={styles.selectedIcon} aria-label="Selected" />}
-                      <Title3>{app.displayName}</Title3><Text>{app.description}</Text><Text size={200}>{app.tables.length} eligible tables</Text>
-                    </Card>
-                  ))}
+                <div className={styles.appTableFrame}>
+                  <Table className={styles.appTable} aria-label="Available model-driven apps">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHeaderCell>Application</TableHeaderCell>
+                        <TableHeaderCell>Description</TableHeaderCell>
+                        <TableHeaderCell>Eligible tables</TableHeaderCell>
+                        <TableHeaderCell />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {apps.map((app) => {
+                        const selected = targetApp?.id === app.id;
+                        return (
+                          <TableRow
+                            key={app.id}
+                            className={selected ? styles.selectedRow : undefined}
+                            aria-selected={selected}
+                          >
+                            <TableCell>
+                              <div className={styles.appName}>
+                                <Text weight="semibold">{app.displayName}</Text>
+                                <Text size={200} className={styles.muted}>{app.uniqueName}</Text>
+                              </div>
+                            </TableCell>
+                            <TableCell>{app.description}</TableCell>
+                            <TableCell>{app.tables.length}</TableCell>
+                            <TableCell className={styles.appAction}>
+                              <Button
+                                appearance={selected ? 'primary' : 'secondary'}
+                                icon={selected ? <CheckmarkCircleFilled aria-label="Selected" /> : undefined}
+                                aria-label={`Select ${app.displayName}`}
+                                aria-pressed={selected}
+                                onClick={() => selectApp(app)}
+                              >
+                                {selected ? 'Selected' : 'Select'}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
               <ConfigField label="Manual App ID fallback" hint="Use this when app discovery does not return the target app.">
@@ -590,15 +659,6 @@ export function SidecarWizard({
           </div>
         </Card>
 
-        <Card className={mergeClasses(styles.panel, styles.summary)}>
-          <Title3>Configuration summary</Title3>
-          <div className={styles.summaryItem}>{targetApp ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.summaryPending} />}<span><Text size={200} className={styles.muted}>Application</Text><br /><Text weight="semibold">{targetApp?.displayName ?? 'Not selected'}</Text></span></div>
-          <div className={styles.summaryItem}><DatabaseRegular className={enabledTableCount ? styles.summaryIcon : styles.summaryPending} /><span><Text size={200} className={styles.muted}>Placement</Text><br /><Text weight="semibold">{enabledTableCount ? `${enabledTableCount} tables · ${enabledFormCount} forms` : 'Not selected'}</Text></span></div>
-          <div className={styles.summaryItem}>{agent ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.summaryPending} />}<span><Text size={200} className={styles.muted}>Published agent</Text><br /><Text weight="semibold">{agent?.displayName ?? 'Not resolved'}</Text></span></div>
-          <div className={styles.summaryItem}><CheckmarkCircleFilled className={styles.summaryIcon} /><span><Text size={200} className={styles.muted}>Icon</Text><br /><Text weight="semibold">{icon.source === 'agent' ? 'Copilot Studio logo' : icon.source === 'uploaded' ? 'Uploaded logo' : 'Default Agent Sidecar icon'}</Text></span></div>
-          <div className={styles.summaryItem}><ShieldKeyholeRegular className={styles.summaryIcon} /><span><Text size={200} className={styles.muted}>Security</Text><br /><Text weight="semibold">System Administrators only</Text></span></div>
-          <Text size={200} className={styles.muted}>Knowledge authoring and publication remain outside installer scope.</Text>
-        </Card>
       </div>
     </div>
   );

@@ -22,4 +22,25 @@ describe('SidecarIcon', () => {
     expect(screen.getByAltText('Default assistant sidecar icon').getAttribute('src'))
       .toContain('agentGuideLibrary.svg');
   });
+
+  it('uses retrieved Dataverse image content before the authenticated web-resource URL', () => {
+    render(
+      <SidecarIcon
+        label="Configured assistant"
+        content={{
+          base64: 'aWNvbg==',
+          mimeType: 'image/png',
+          width: 128,
+          height: 128,
+          contentHash: 'hash',
+        }}
+        webResourceName="maftagsc_/sidecars/configuration/icon_hash.png"
+        dataverseOrgUrl="https://example.crm.dynamics.com"
+      />,
+    );
+
+    expect(screen.getByAltText('Configured assistant sidecar icon').getAttribute('src')).toBe(
+      'data:image/png;base64,aWNvbg==',
+    );
+  });
 });

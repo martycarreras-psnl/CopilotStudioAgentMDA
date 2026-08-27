@@ -73,6 +73,8 @@ export interface SidecarConfiguration {
   bindingSolutionUniqueName: string;
   iconSource: SidecarIconSource;
   iconWebResourceName?: string;
+  iconContent?: SidecarIconContent;
+  iconDisplayIssue?: string;
   iconContentHash?: string;
   iconMimeType?: string;
   lifecycleState: SidecarLifecycleState;

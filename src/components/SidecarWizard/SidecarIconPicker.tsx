@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
+  Button,
   MessageBar,
   MessageBarBody,
   Radio,
@@ -30,6 +31,8 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   guidance: { color: tokens.colorNeutralForeground2 },
+  uploadRow: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, flexWrap: 'wrap' },
+  fileInput: { display: 'none' },
 });
 
 interface SidecarIconPickerProps {
@@ -47,6 +50,7 @@ export function SidecarIconPicker({
 }: SidecarIconPickerProps) {
   const styles = useStyles();
   const [uploaded, setUploaded] = useState<SidecarIconContent>();
+  const uploadInput = useRef<HTMLInputElement>(null);
   const selectedContent = value.source === 'agent'
     ? agentIcon
     : value.source === 'uploaded'
@@ -89,11 +93,21 @@ export function SidecarIconPicker({
         <Radio value="default" label="Use the default Agent Sidecar icon" />
       </RadioGroup>
       <input
+        ref={uploadInput}
+        className={styles.fileInput}
         type="file"
         accept="image/png,image/jpeg"
         aria-label="Upload sidecar logo"
         onChange={(event) => void upload(event.currentTarget.files?.[0])}
       />
+      <div className={styles.uploadRow}>
+        <Button appearance="secondary" onClick={() => uploadInput.current?.click()}>
+          Choose image
+        </Button>
+        <Text size={200} className={styles.guidance}>
+          {uploaded ? `${uploaded.width}×${uploaded.height} ${uploaded.mimeType}` : 'No custom image selected'}
+        </Text>
+      </div>
       <Text size={200} className={styles.guidance}>
         PNG or JPEG, square recommended, 128×128 or 256×256 preferred, maximum
         512×512 and 256 KB. Transparent PNG works best. SVG uploads are not accepted.
@@ -105,7 +119,7 @@ export function SidecarIconPicker({
             src={sidecarIconDataUrl(selectedContent)}
             alt="Selected sidecar icon preview"
           />
-          <Text>{selectedContent.width}×{selectedContent.height} · {selectedContent.mimeType}</Text>
+          <Text>Selected preview</Text>
         </div>
       )}
       {value.source === 'default' && (

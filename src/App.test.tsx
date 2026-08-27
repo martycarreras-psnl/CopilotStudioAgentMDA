@@ -24,11 +24,13 @@ describe('Agent Sidecar Administration', () => {
 
   it('marks the chosen Model-driven App as selected', async () => {
     render(<App />, { initialRoute: '/new' });
-    const salesApp = await screen.findByRole('button', { name: /Sales Workspace/ });
+    const salesApp = await screen.findByRole('button', { name: 'Select Sales Workspace' });
     expect(salesApp.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(salesApp);
     expect(salesApp.getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByLabelText('Selected')).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Available model-driven apps' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Current configuration choices' })).toBeTruthy();
   });
 
   it('shows the exact redirect URI and blocks invalid identity GUIDs', async () => {
@@ -73,18 +75,23 @@ describe('Agent Sidecar Administration', () => {
 
   it('supports disable and re-enable without deleting configuration', async () => {
     render(<App />, { initialRoute: '/sidecars/sidecar-hr-management' });
-    const disable = await screen.findByRole('button', { name: 'Disable' });
+    const disable = await screen.findByRole('button', { name: 'Disable sidecar' });
     fireEvent.click(disable);
-    const enable = await screen.findByRole('button', { name: 'Enable' });
+    const enable = await screen.findByRole('button', { name: 'Enable sidecar' });
     fireEvent.click(enable);
-    expect(await screen.findByRole('button', { name: 'Disable' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Disable sidecar' })).toBeTruthy();
   });
 
   it('edits tables and icon in place while preserving immutable identity', async () => {
     render(<App />, { initialRoute: '/sidecars/sidecar-hr-management' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit tables & icon' }));
+    expect((await screen.findAllByText('Information')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Details')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Validate health' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Change icon' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit placement' }));
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Refine placement and appearance' })).toBeTruthy();
     expect(screen.getByText(/app, agent connection, pane identity, Entra identity/)).toBeTruthy();
     expect((await screen.findByRole('radio', { name: 'Keep the current icon' }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText(/\d+ forms? selected/)).toBeTruthy();

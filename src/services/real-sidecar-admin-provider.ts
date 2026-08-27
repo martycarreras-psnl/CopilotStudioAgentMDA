@@ -19,7 +19,7 @@ import {
   publishTables,
   publishWebResources,
 } from '@/services/dataverse-custom-api';
-import type { PublishedAgent, SidecarConfiguration, SidecarDraft, SidecarEditModel, SidecarHealthCheck, SidecarHealthState, SidecarLifecycleState, SidecarMutableUpdate, SidecarProgressCallback, TargetModelDrivenApp, TargetTable } from '@/types/sidecar-admin-models';
+import type { PublishedAgent, SidecarConfiguration, SidecarDraft, SidecarEditModel, SidecarHealthCheck, SidecarHealthState, SidecarIconContent, SidecarLifecycleState, SidecarMutableUpdate, SidecarProgressCallback, TargetModelDrivenApp, TargetTable } from '@/types/sidecar-admin-models';
 import { parseCopilotStudioConnectionString } from '@/utils/agent-link';
 import { discoverAppForms, type DiscoveredForm } from '@/services/model-driven-app-discovery';
 import { isInformationFormName } from '@/lib/target-forms';
@@ -222,7 +222,13 @@ function includesHandler(value: string, id: string): boolean {
     && item.getAttribute('libraryName') === LIBRARY,
   );
 }
-function map(record: Maftagsc_sidecarconfigurations, bindings: Maftagsc_targetbindings[], checks: SidecarHealthCheck[] = []): SidecarConfiguration {
+function map(
+  record: Maftagsc_sidecarconfigurations,
+  bindings: Maftagsc_targetbindings[],
+  checks: SidecarHealthCheck[] = [],
+  iconContent?: SidecarIconContent,
+  iconDisplayIssue?: string,
+): SidecarConfiguration {
   const tables = new Map<string, TargetTable>();
   for (const binding of bindings) {
     const form = { formId: binding.maftagsc_formid, name: binding.maftagsc_formname ?? binding.maftagsc_formid, enabled: binding.maftagsc_enabled };
@@ -243,6 +249,8 @@ function map(record: Maftagsc_sidecarconfigurations, bindings: Maftagsc_targetbi
       ? record.maftagsc_iconsource
       : 'default',
     iconWebResourceName: record.maftagsc_iconwebresourcename,
+    iconContent,
+    iconDisplayIssue,
     iconContentHash: record.maftagsc_iconcontenthash,
     iconMimeType: record.maftagsc_iconmimetype,
     enabledSurfaces: ['forms'], autoEnableNewTables: record.maftagsc_autoenablenewtables,
@@ -263,6 +271,47 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       filter: `${configurationFilter}maftagsc_formid ne '${EDIT_LOCK_FORM_ID}'`,
       top: 5000,
     }), 'List target bindings');
+  }
+  async function iconContentFor(
+    record: Maftagsc_sidecarconfigurations,
+  ): Promise<{ content?: SidecarIconContent; issue?: string }> {
+    const name = record.maftagsc_iconwebresourcename;
+    if (!name && (!record.maftagsc_iconsource || record.maftagsc_iconsource === 'default')) {
+      return {};
+    }
+    if (!isOwnedIconName(name, record.maftagsc_sidecarconfigurationid)) {
+      return { issue: `The configured icon for ${record.maftagsc_name} is invalid.` };
+    }
+    try {
+      const resource = data(await listSidecarIconWebResources({
+        select: ['name', 'content'],
+        filter: `name eq '${odataString(name)}'`,
+        top: 1,
+      }), 'Read sidecar icon')[0];
+      if (!resource?.content || resource.name !== name) {
+        return { issue: `The configured icon for ${record.maftagsc_name} could not be read.` };
+      }
+      const inspected = await inspectSidecarIconBase64(resource.content);
+      if (
+        record.maftagsc_iconcontenthash
+        && inspected.contentHash !== record.maftagsc_iconcontenthash
+      ) {
+        return { issue: `The configured icon for ${record.maftagsc_name} failed integrity validation.` };
+      }
+      return { content: inspected };
+    } catch (error) {
+      return {
+        issue: `The configured icon for ${record.maftagsc_name} could not be loaded: ${message(error)}`,
+      };
+    }
+  }
+  async function mapConfiguration(
+    record: Maftagsc_sidecarconfigurations,
+    bindings: Maftagsc_targetbindings[],
+    checks: SidecarHealthCheck[] = [],
+  ): Promise<SidecarConfiguration> {
+    const icon = await iconContentFor(record);
+    return map(record, bindings, checks, icon.content, icon.issue);
   }
   async function acquireEditLock(configurationId: string): Promise<string> {
     const existing = data(await Bindings.getAll({
@@ -559,7 +608,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       { id: 'identity', label: 'Delegated identity', state: record.maftagsc_tenantid && record.maftagsc_publicclientapplicationid ? 'pass' : 'fail', detail: 'Tenant and public-client identifiers are stored without secrets.' },
       { id: 'agent', label: 'Copilot Studio agent', state: 'pass', detail: `Configured agent: ${record.maftagsc_agentschemaname}.` },
     ];
-    return map(updated, bindings, checks);
+    return mapConfiguration(updated, bindings, checks);
   }
   async function mutate(id: string, mode: 'apply' | 'remove', onProgress?: SidecarProgressCallback): Promise<Maftagsc_targetbindings[]> {
     assertSidecarActionsAvailable();
@@ -643,9 +692,15 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     },
     async listConfigurations() {
       const [records, bindings] = await Promise.all([Configurations.getAll({ orderBy: ['modifiedon desc'], top: 5000 }), bindingsFor()]);
-      return data(records, 'List configurations').map((record) => map(record, bindings.filter((binding) => binding._maftagsc_sidecarconfiguration_value === record.maftagsc_sidecarconfigurationid)));
+      return Promise.all(data(records, 'List configurations').map((record) =>
+        mapConfiguration(
+          record,
+          bindings.filter((binding) =>
+            binding._maftagsc_sidecarconfiguration_value === record.maftagsc_sidecarconfigurationid),
+        ),
+      ));
     },
-    async getConfiguration(id) { try { const configurationId = guid(id, 'Configuration ID'); return map(data(await Configurations.get(configurationId), 'Read configuration'), await bindingsFor(configurationId)); } catch (error) { if (/not found|does not exist|404/i.test(message(error))) return null; throw error; } },
+    async getConfiguration(id) { try { const configurationId = guid(id, 'Configuration ID'); return mapConfiguration(data(await Configurations.get(configurationId), 'Read configuration'), await bindingsFor(configurationId)); } catch (error) { if (/not found|does not exist|404/i.test(message(error))) return null; throw error; } },
     async discoverTargetApps() {
       const apps = data(await AppmodulesService.getAll({ select: ['appmoduleid'], filter: 'statecode eq 0 and componentstate eq 0', orderBy: ['name asc'], top: 500 }), 'Discover apps');
       return Promise.all(apps.map((app) => targetApp(app.appmoduleid)));
@@ -1187,7 +1242,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       }
       return configurationEnabled
         ? validate(configurationId)
-        : map(data(await Configurations.get(configurationId), 'Read updated configuration'), await bindingsFor(configurationId));
+        : mapConfiguration(data(await Configurations.get(configurationId), 'Read updated configuration'), await bindingsFor(configurationId));
     },
     validate,
     async reconcile(id, onProgress) { const configurationId = guid(id, 'Configuration ID'); await mutate(configurationId, 'apply', onProgress); data(await Configurations.update(configurationId, { statecode: 0, statuscode: STATUS.deployed, maftagsc_healthstate: HEALTH.healthy, maftagsc_lastoperationsummary: 'Approved reconciliation completed.' }), 'Complete reconciliation'); return validate(configurationId); },
@@ -1224,7 +1279,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
           throw new Error('A concurrent enable reached the 10-sidecar limit. This sidecar remains disabled.');
         }
       }
-      return enabled ? validate(configurationId) : map(data(await Configurations.get(configurationId), 'Read configuration'), await bindingsFor(configurationId));
+      return enabled ? validate(configurationId) : mapConfiguration(data(await Configurations.get(configurationId), 'Read configuration'), await bindingsFor(configurationId));
     },
     async uninstall(id, onProgress) {
       const configurationId = guid(id, 'Configuration ID');

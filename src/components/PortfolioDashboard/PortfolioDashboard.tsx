@@ -224,6 +224,7 @@ export function PortfolioDashboard({
                 <div className={styles.cardIdentity}>
                   <SidecarIcon
                     label={configuration.name}
+                    content={configuration.iconContent}
                     webResourceName={configuration.iconWebResourceName}
                     dataverseOrgUrl={dataverseOrgUrl}
                     size={52}
@@ -248,6 +249,9 @@ export function PortfolioDashboard({
                     <div className={styles.fact}><Text size={200} className={styles.label}>Published agent</Text><Text weight="semibold">{configuration.agentDisplayName}</Text></div>
                     <div className={styles.fact}><Text size={200} className={styles.label}>Placement</Text><Text weight="semibold">{configuration.tables.length} table{configuration.tables.length === 1 ? '' : 's'}</Text></div>
                   </div>
+                  {configuration.iconDisplayIssue && (
+                    <Text size={200} className={styles.warningIcon}>Configured icon unavailable; showing the packaged fallback.</Text>
+                  )}
                 </div>
                 <CardFooter><Button appearance="primary" icon={<ArrowRightRegular />} iconPosition="after" onClick={() => onOpen(configuration.id)}>Manage sidecar</Button></CardFooter>
               </Card>

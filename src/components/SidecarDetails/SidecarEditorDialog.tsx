@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Badge,
   Button,
+  Card,
   Checkbox,
   Dialog,
   DialogActions,
@@ -18,37 +20,66 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
-import { CheckmarkCircleFilled, EditRegular } from '@fluentui/react-icons';
+import { CheckmarkCircleFilled, EditRegular, ImageRegular, TableRegular } from '@fluentui/react-icons';
 import { defaultFormId } from '@/lib/target-forms';
+import { SidecarIcon } from '@/components/SidecarIcon/SidecarIcon';
 import { SidecarIconPicker } from '@/components/SidecarWizard/SidecarIconPicker';
 import type {
   SidecarEditModel,
+  SidecarIconContent,
   SidecarIconSelection,
+  SidecarIconSource,
   SidecarMutableUpdate,
   TargetTable,
 } from '@/types/sidecar-admin-models';
 
 const useStyles = makeStyles({
-  surface: { width: 'min(760px, calc(100vw - 32px))', maxWidth: '760px' },
+  surface: {
+    width: 'min(1040px, calc(100vw - 32px))',
+    maxWidth: '1040px',
+    maxHeight: 'min(900px, calc(100vh - 32px))',
+  },
   stack: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  section: {
+  intro: {
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
-    paddingBlock: tokens.spacingVerticalS,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
-  table: {
+  eyebrow: { color: tokens.colorBrandForeground1, textTransform: 'uppercase', letterSpacing: '0.08em' },
+  editorGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr auto',
-    alignItems: 'center',
+    gridTemplateColumns: 'minmax(0, 1.45fr) minmax(300px, .55fr)',
+    gap: tokens.spacingHorizontalL,
+    alignItems: 'start',
+    '@media (max-width: 820px)': { gridTemplateColumns: '1fr' },
+  },
+  sectionCard: {
+    padding: tokens.spacingHorizontalL,
+    gap: tokens.spacingVerticalM,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: 'none',
+  },
+  sectionHeading: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS },
+  placementHeader: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(150px, .8fr) minmax(240px, 1.4fr) auto',
     gap: tokens.spacingHorizontalM,
+    paddingBlock: tokens.spacingVerticalS,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    color: tokens.colorNeutralForeground2,
+  },
+  tableRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(150px, .8fr) minmax(240px, 1.4fr) auto',
+    alignItems: 'start',
+    gap: tokens.spacingHorizontalM,
+    paddingBlock: tokens.spacingVerticalM,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   forms: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXS,
-    paddingLeft: tokens.spacingHorizontalXL,
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalM,
   },
   muted: { color: tokens.colorNeutralForeground2 },
   selectionSummary: {
@@ -56,6 +87,19 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: tokens.spacingHorizontalS,
     color: tokens.colorPaletteGreenForeground1,
+  },
+  currentIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  currentIconCopy: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  footer: {
+    paddingTop: tokens.spacingVerticalM,
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
 });
 
@@ -71,6 +115,12 @@ interface SidecarEditorDialogProps {
   loading: boolean;
   busy: boolean;
   error?: string;
+  triggerLabel?: string;
+  configurationName?: string;
+  currentIconSource?: SidecarIconSource;
+  currentIconContent?: SidecarIconContent;
+  currentIconWebResourceName?: string;
+  dataverseOrgUrl?: string;
   onOpen: () => void;
   onSave: (update: SidecarMutableUpdate) => Promise<void>;
 }
@@ -80,6 +130,12 @@ export function SidecarEditorDialog({
   loading,
   busy,
   error,
+  triggerLabel = 'Edit tables & icon',
+  configurationName = 'sidecar',
+  currentIconSource = 'default',
+  currentIconContent,
+  currentIconWebResourceName,
+  dataverseOrgUrl,
   onOpen,
   onSave,
 }: SidecarEditorDialogProps) {
@@ -167,11 +223,17 @@ export function SidecarEditorDialog({
         }}
         disabled={busy}
       >
-        Edit tables &amp; icon
+        {triggerLabel}
       </Button>
       <DialogSurface className={styles.surface}>
         <DialogBody>
-          <DialogTitle>Edit tables, forms, and icon</DialogTitle>
+          <div className={styles.intro}>
+            <Text size={200} weight="semibold" className={styles.eyebrow}>Sidecar settings</Text>
+            <DialogTitle>Refine placement and appearance</DialogTitle>
+            <Text className={styles.muted}>
+              Update where {configurationName} appears and how people recognize it in the target app.
+            </Text>
+          </div>
           <DialogContent className={styles.stack}>
             <MessageBar intent="info">
               <MessageBarBody>
@@ -186,12 +248,14 @@ export function SidecarEditorDialog({
               </MessageBar>
             )}
             {loading || !model ? <Spinner label="Loading current app tables and forms" /> : (
-              <>
-                <section className={styles.section}>
-                  <Text weight="semibold" size={400}>Tables and forms</Text>
-                  <Text size={200} className={styles.muted}>
-                    The list is refreshed from the current model-driven app. Select at least one form.
-                  </Text>
+              <div className={styles.editorGrid}>
+                <Card className={styles.sectionCard}>
+                  <div className={styles.sectionHeading}>
+                    <TableRegular />
+                    <Text weight="semibold" size={400}>Placement</Text>
+                    <Badge appearance="tint">{selectedFormCount} selected</Badge>
+                  </div>
+                  <Text size={200} className={styles.muted}>Choose the exact main forms where this sidecar should be available.</Text>
                   {unavailableSelectedCount > 0 && (
                     <MessageBar intent="warning">
                       <MessageBarBody>
@@ -200,19 +264,16 @@ export function SidecarEditorDialog({
                       </MessageBarBody>
                     </MessageBar>
                   )}
+                  <div className={styles.placementHeader} aria-hidden="true">
+                    <Text size={200} weight="semibold">Table</Text>
+                    <Text size={200} weight="semibold">Forms</Text>
+                    <Text size={200} weight="semibold">Status</Text>
+                  </div>
                   {tables.map((table) => (
-                    <div className={styles.section} key={table.logicalName}>
-                      <div className={styles.table}>
-                        <div>
-                          <Text weight="semibold">{table.displayName}</Text><br />
-                          <Text size={200} className={styles.muted}>{table.logicalName}</Text>
-                        </div>
-                        <Checkbox
-                          checked={table.enabled}
-                          label="Enabled"
-                          onChange={(_, data) =>
-                            setTableEnabled(table.logicalName, Boolean(data.checked))}
-                        />
+                    <div className={styles.tableRow} key={table.logicalName}>
+                      <div>
+                        <Text weight="semibold">{table.displayName}</Text><br />
+                        <Text size={200} className={styles.muted}>{table.logicalName}</Text>
                       </div>
                       <div className={styles.forms}>
                         {table.forms.map((form) => (
@@ -228,15 +289,39 @@ export function SidecarEditorDialog({
                           />
                         ))}
                       </div>
+                      <Checkbox
+                          checked={table.enabled}
+                          label="Enabled"
+                          onChange={(_, data) =>
+                            setTableEnabled(table.logicalName, Boolean(data.checked))}
+                        />
                     </div>
                   ))}
                   <div className={styles.selectionSummary}>
                     <CheckmarkCircleFilled />
                     <Text size={200}>{selectedFormCount} form{selectedFormCount === 1 ? '' : 's'} selected</Text>
                   </div>
-                </section>
-                <section className={styles.section}>
-                  <Text weight="semibold" size={400}>Sidecar icon</Text>
+                </Card>
+                <Card className={styles.sectionCard}>
+                  <div className={styles.sectionHeading}>
+                    <ImageRegular />
+                    <Text weight="semibold" size={400}>Appearance</Text>
+                  </div>
+                  <div className={styles.currentIcon}>
+                    <SidecarIcon
+                      label={configurationName}
+                      content={currentIconContent}
+                      webResourceName={currentIconWebResourceName}
+                      dataverseOrgUrl={dataverseOrgUrl}
+                      size={56}
+                    />
+                    <div className={styles.currentIconCopy}>
+                      <Text size={200} className={styles.muted}>Current icon</Text>
+                      <Text weight="semibold">
+                        {currentIconSource === 'agent' ? 'Copilot Studio agent logo' : currentIconSource === 'uploaded' ? 'Custom uploaded logo' : 'Agent Sidecar default'}
+                      </Text>
+                    </div>
+                  </div>
                   <RadioGroup
                     value={iconMode}
                     onChange={(_, data) => setIconMode(data.value as 'keep' | 'replace')}
@@ -253,11 +338,11 @@ export function SidecarEditorDialog({
                     />
                   )}
                   {iconError && <Text className={styles.muted}>{iconError}</Text>}
-                </section>
-              </>
+                </Card>
+              </div>
             )}
           </DialogContent>
-          <DialogActions>
+          <DialogActions className={styles.footer}>
             <Button appearance="secondary" onClick={() => setOpen(false)} disabled={busy}>
               Cancel
             </Button>

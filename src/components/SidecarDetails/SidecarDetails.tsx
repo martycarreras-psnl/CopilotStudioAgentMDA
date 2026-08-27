@@ -27,9 +27,11 @@ import {
   CheckmarkCircleRegular,
   DeleteRegular,
   DismissCircleRegular,
+  ImageRegular,
   PauseRegular,
   PlayRegular,
   ShieldCheckmarkRegular,
+  TableRegular,
   WarningRegular,
 } from '@fluentui/react-icons';
 import { SidecarEditorDialog } from '@/components/SidecarDetails/SidecarEditorDialog';
@@ -56,7 +58,6 @@ const useStyles = makeStyles({
   identity: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalL },
   heading: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   badges: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
-  actions: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   grid: { display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)', gap: tokens.spacingHorizontalL, alignItems: 'start', '@media (max-width: 900px)': { gridTemplateColumns: '1fr' } },
   stack: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
   card: {
@@ -68,11 +69,29 @@ const useStyles = makeStyles({
   facts: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: tokens.spacingHorizontalL, '@media (max-width: 520px)': { gridTemplateColumns: '1fr' } },
   fact: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
   muted: { color: tokens.colorNeutralForeground2 },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalL,
+    '@media (max-width: 560px)': { flexDirection: 'column' },
+  },
+  cardHeading: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  headingIcon: { color: tokens.colorBrandForeground1 },
+  appearance: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM },
+  lifecycleAction: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   healthRow: { display: 'grid', gridTemplateColumns: '24px 1fr', gap: tokens.spacingHorizontalS, paddingBlock: tokens.spacingVerticalS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
   healthPass: { color: tokens.colorPaletteGreenForeground1 },
   healthWarning: { color: tokens.colorPaletteMarigoldForeground2 },
   healthFail: { color: tokens.colorPaletteRedForeground1 },
-  tableRow: { display: 'flex', justifyContent: 'space-between', gap: tokens.spacingHorizontalM, paddingBlock: tokens.spacingVerticalS, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
+  tableRow: { display: 'grid', gridTemplateColumns: 'minmax(180px, .7fr) minmax(0, 1.3fr)', gap: tokens.spacingHorizontalL, paddingBlock: tokens.spacingVerticalM, borderBottom: `1px solid ${tokens.colorNeutralStroke2}` },
+  formNames: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalXS },
+  formName: {
+    paddingInline: tokens.spacingHorizontalS,
+    paddingBlock: tokens.spacingVerticalXXS,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
   danger: { border: `1px solid ${tokens.colorPaletteRedBorder2}` },
 });
 
@@ -142,6 +161,7 @@ export function SidecarDetails({
         <div className={styles.identity}>
           <SidecarIcon
             label={configuration.name}
+            content={configuration.iconContent}
             webResourceName={configuration.iconWebResourceName}
             dataverseOrgUrl={dataverseOrgUrl}
             size={64}
@@ -151,20 +171,6 @@ export function SidecarDetails({
             <Text size={400} className={styles.muted}>{configuration.appDisplayName} · {configuration.agentDisplayName}</Text>
             <div className={styles.badges}><HealthBadge state={configuration.healthState} /><LifecycleBadge state={configuration.lifecycleState} /></div>
           </div>
-        </div>
-        <div className={styles.actions}>
-          <SidecarEditorDialog
-            model={editModel}
-            loading={editLoading}
-            busy={busy}
-            error={editError}
-            onOpen={onEditOpen}
-            onSave={onUpdate}
-          />
-          <Button icon={<ShieldCheckmarkRegular />} onClick={onValidate} disabled={busy}>Validate health</Button>
-          {configuration.lifecycleState === 'disabled'
-            ? <Button appearance="primary" icon={<PlayRegular />} onClick={() => onSetEnabled(true)} disabled={busy || configuration.healthState === 'critical'} title={configuration.healthState === 'critical' ? 'Resolve blocking health failures before enabling.' : undefined}>Enable</Button>
-            : <Button icon={<PauseRegular />} onClick={() => onSetEnabled(false)} disabled={busy}>Disable</Button>}
         </div>
       </section>
 
@@ -194,8 +200,13 @@ export function SidecarDetails({
           )}
 
           <Card className={styles.card}>
-            <Title2 as="h2">Health validation</Title2>
-            <Text className={styles.muted}>Runs when this page opens, after every change, and on demand. Last validated: {validationTime}</Text>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardHeading}>
+                <Title2 as="h2">Health validation</Title2>
+                <Text className={styles.muted}>Last validated: {validationTime}</Text>
+              </div>
+              <Button icon={<ShieldCheckmarkRegular />} onClick={onValidate} disabled={busy}>Validate health</Button>
+            </div>
             {configuration.healthChecks.map((check) => (
               <div className={styles.healthRow} key={check.id}>
                 {check.state === 'pass'
@@ -210,26 +221,104 @@ export function SidecarDetails({
           </Card>
 
           <Card className={styles.card}>
-            <Title2 as="h2">Enabled tables</Title2>
-            <MessageBar intent="info"><MessageBarBody><MessageBarTitle>Active main forms</MessageBarTitle>Selected tables use their active main forms. Newly added app tables require administrator-approved drift reconciliation before form metadata changes.</MessageBarBody></MessageBar>
-            {configuration.tables.map((table) => <div className={styles.tableRow} key={table.logicalName}><div><Text weight="semibold">{table.displayName}</Text><br /><Text size={200} className={styles.muted}>{table.logicalName}</Text></div><Text>{table.formCount} main form{table.formCount === 1 ? '' : 's'}</Text></div>)}
+            <div className={styles.cardHeader}>
+              <div className={styles.cardHeading}>
+                <div className={styles.identity}><TableRegular className={styles.headingIcon} /><Title2 as="h2">Placement</Title2></div>
+                <Text className={styles.muted}>Tables and exact forms where this sidecar is available.</Text>
+              </div>
+              <SidecarEditorDialog
+                triggerLabel="Edit placement"
+                configurationName={configuration.name}
+                currentIconSource={configuration.iconSource}
+                currentIconContent={configuration.iconContent}
+                currentIconWebResourceName={configuration.iconWebResourceName}
+                dataverseOrgUrl={dataverseOrgUrl}
+                model={editModel}
+                loading={editLoading}
+                busy={busy}
+                error={editError}
+                onOpen={onEditOpen}
+                onSave={onUpdate}
+              />
+            </div>
+            {configuration.tables.map((table) => (
+              <div className={styles.tableRow} key={table.logicalName}>
+                <div><Text weight="semibold">{table.displayName}</Text><br /><Text size={200} className={styles.muted}>{table.logicalName}</Text></div>
+                <div className={styles.formNames}>
+                  {table.forms.map((form) => (
+                    <Text className={styles.formName} size={200} key={form.formId}>{form.name}</Text>
+                  ))}
+                </div>
+              </div>
+            ))}
           </Card>
         </div>
 
         <aside className={styles.stack}>
           <Card className={styles.card}>
-            <Title3>Configuration</Title3>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardHeading}>
+                <div className={styles.identity}><ImageRegular className={styles.headingIcon} /><Title3>Appearance</Title3></div>
+                <Text className={styles.muted}>The icon people see on the sidecar rail.</Text>
+              </div>
+              <SidecarEditorDialog
+                triggerLabel="Change icon"
+                configurationName={configuration.name}
+                currentIconSource={configuration.iconSource}
+                currentIconContent={configuration.iconContent}
+                currentIconWebResourceName={configuration.iconWebResourceName}
+                dataverseOrgUrl={dataverseOrgUrl}
+                model={editModel}
+                loading={editLoading}
+                busy={busy}
+                error={editError}
+                onOpen={onEditOpen}
+                onSave={onUpdate}
+              />
+            </div>
+            <div className={styles.appearance}>
+              <SidecarIcon
+                label={configuration.name}
+                content={configuration.iconContent}
+                webResourceName={configuration.iconWebResourceName}
+                dataverseOrgUrl={dataverseOrgUrl}
+                size={56}
+              />
+              <div className={styles.fact}>
+                <Text size={200} className={styles.muted}>Icon source</Text>
+                <Text weight="semibold">{configuration.iconSource === 'agent' ? 'Copilot Studio agent logo' : configuration.iconSource === 'uploaded' ? 'Custom uploaded logo' : 'Agent Sidecar default'}</Text>
+              </div>
+            </div>
+            {configuration.iconDisplayIssue && (
+              <MessageBar intent="warning">
+                <MessageBarBody>
+                  <MessageBarTitle>Configured icon unavailable</MessageBarTitle>
+                  {configuration.iconDisplayIssue} The packaged icon is shown as a fallback.
+                </MessageBarBody>
+              </MessageBar>
+            )}
+          </Card>
+          <Card className={styles.card}>
+            <div className={styles.cardHeading}>
+              <Title3>Availability</Title3>
+              <Text className={styles.muted}>Control whether the configured panes are available without deleting the sidecar.</Text>
+            </div>
+            <Text weight="semibold">{configuration.lifecycleState === 'disabled' ? 'Currently disabled' : 'Currently enabled'}</Text>
+            <div className={styles.lifecycleAction}>
+              {configuration.lifecycleState === 'disabled'
+                ? <Button appearance="primary" icon={<PlayRegular />} onClick={() => onSetEnabled(true)} disabled={busy || configuration.healthState === 'critical'} title={configuration.healthState === 'critical' ? 'Resolve blocking health failures before enabling.' : undefined}>Enable sidecar</Button>
+                : <Button icon={<PauseRegular />} onClick={() => onSetEnabled(false)} disabled={busy}>Disable sidecar</Button>}
+            </div>
+            <Text size={200} className={styles.muted}>Changes use rollback protection and preserve this configuration identity.</Text>
+          </Card>
+          <Card className={styles.card}>
+            <Title3>Technical details</Title3>
             <div className={styles.facts}>
               <div className={styles.fact}><Text size={200} className={styles.muted}>App unique name</Text><Text>{configuration.appUniqueName}</Text></div>
               <div className={styles.fact}><Text size={200} className={styles.muted}>Pane width</Text><Text>{configuration.paneWidth}px</Text></div>
               <div className={styles.fact}><Text size={200} className={styles.muted}>Agent schema</Text><Text>{configuration.agentSchemaName}</Text></div>
               <div className={styles.fact}><Text size={200} className={styles.muted}>Binding solution</Text><Text>{configuration.bindingSolutionUniqueName}</Text></div>
             </div>
-          </Card>
-          <Card className={styles.card}>
-            <Title3>Lifecycle safety</Title3>
-            <Text>Deployments capture a last-known-good snapshot. Failure triggers automatic rollback; incomplete rollback becomes a blocking health issue.</Text>
-            <Text>No dedicated lifecycle history is retained—only the current configuration and validation state.</Text>
           </Card>
           <Card className={mergeClasses(styles.card, styles.danger)}>
             <Title3>Scoped uninstall</Title3>

@@ -6,7 +6,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 
 ## What's new
 
-- **🆕 Refined administration experience.** The Sidecar Dashboard now presents configured assistants as a polished visual gallery with the same pane icons users see in their model-driven apps. The guided setup adds clearer hierarchy, completed-step checkmarks, checkmarked operation accomplishments, and an editable tenant ID inferred from the signed-in Power Apps host.
+- **🆕 Refined administration experience.** The Sidecar Dashboard presents configured assistants with the same validated icon content users see in their model-driven apps. Guided setup uses a column-based application list, a compact in-flow choice summary, completed-step checkmarks, checkmarked operation accomplishments, and an editable tenant ID inferred from the signed-in Power Apps host.
 - **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
 - **Meaningful conversation history.** Greeting-only sessions stay out of **Recent conversations** until the user sends a message, so startup noise does not crowd out useful history.
 - **List-aware analysis.** On a model-driven list, requests to analyze or process records pause for an explicit **Current view** versus **All accessible records** choice, warn about large datasets, and attach the chosen view definition only to that confirmed request.
@@ -53,7 +53,7 @@ Open the **Agent Sidecar** app and run the wizard:
 
 Completed setup steps and successful lifecycle operations display checkmarks so administrators can distinguish confirmed accomplishments from pending work at a glance.
 
-After deployment, open **Manage sidecar → Edit tables & icon** to add or remove table/form associations or replace/reset the icon. The edit runs in place: configuration and pane IDs, app and agent connections, Entra identity, binding solution, and conversation history remain unchanged. The administration app refreshes the app's current forms, requires at least one selection, applies additions before removals, publishes and reads back the result, and rejects a save if another administrator changed the sidecar after the editor opened. You can also validate, reconcile drift, disable or enable, and uninstall from the same page, with live progress and a downloadable report.
+After deployment, the overview groups information by purpose and keeps each action beside the content it changes. **Placement** lists every enabled table and form and opens the refined placement/appearance editor; **Appearance** previews the configured icon and provides its change action; **Health validation** and **Availability** own their respective actions. In-place edits preserve configuration and pane IDs, app and agent connections, Entra identity, binding solution, and conversation history. The administration app refreshes the app's current forms, requires at least one selection, applies additions before removals, publishes and reads back the result, and rejects a save if another administrator changed the sidecar after the editor opened.
 
 ### 5. Use it
 
