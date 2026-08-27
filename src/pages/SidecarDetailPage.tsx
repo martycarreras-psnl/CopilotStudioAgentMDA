@@ -4,6 +4,7 @@ import { SidecarDetails } from '@/components/SidecarDetails/SidecarDetails';
 import { useOperationReport } from '@/hooks/useOperationReport';
 import {
   useReconcileSidecar,
+  useAdminAccess,
   useSetSidecarEnabled,
   useSidecarConfiguration,
   useSidecarEditModel,
@@ -16,6 +17,7 @@ export function SidecarDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [editRequested, setEditRequested] = useState(false);
+  const access = useAdminAccess();
   const configuration = useSidecarConfiguration(id);
   const editModel = useSidecarEditModel(id, editRequested);
   const update = useUpdateSidecar();
@@ -33,13 +35,14 @@ export function SidecarDetailPage() {
   return (
     <SidecarDetails
       configuration={configuration.data}
+      dataverseOrgUrl={access.data?.dataverseOrgUrl}
       loading={configuration.isLoading}
       busy={busy}
       error={error?.message}
       editModel={editModel.data}
       editLoading={editModel.isLoading}
       editError={editError?.message}
-      report={{ active: busy, progress: report.progress, errorCount: report.errorCount, hasEntries: report.hasEntries, onDownload: report.download }}
+      report={{ active: busy, progress: report.progress, entries: report.log, errorCount: report.errorCount, hasEntries: report.hasEntries, onDownload: report.download }}
       onBack={() => navigate('/')}
       onEditOpen={() => setEditRequested(true)}
       onValidate={async () => { if (id) await validate.mutateAsync(id); }}

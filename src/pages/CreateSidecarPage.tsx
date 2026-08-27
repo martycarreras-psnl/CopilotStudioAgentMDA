@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { SidecarWizard } from '@/components/SidecarWizard/SidecarWizard';
 import {
+  useAdminAccess,
   useDeploySidecar,
   useDeploymentPreview,
   usePublishedAgents,
@@ -10,6 +11,7 @@ import {
 
 export function CreateSidecarPage() {
   const navigate = useNavigate();
+  const access = useAdminAccess();
   const targetApps = useTargetApps();
   const publishedAgents = usePublishedAgents();
   const resolveManual = useResolveManualTargetApp();
@@ -22,6 +24,7 @@ export function CreateSidecarPage() {
     <SidecarWizard
       apps={targetApps.data}
       appsLoading={targetApps.isLoading}
+      defaultTenantId={access.data?.tenantId}
       agents={publishedAgents.data}
       agentsLoading={publishedAgents.isLoading}
       busy={resolveManual.isPending || preview.isPending || deploy.isPending}

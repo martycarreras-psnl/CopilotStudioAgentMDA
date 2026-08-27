@@ -26,24 +26,45 @@ import {
   ArrowSyncRegular,
   CheckmarkCircleRegular,
   DeleteRegular,
+  DismissCircleRegular,
   PauseRegular,
   PlayRegular,
   ShieldCheckmarkRegular,
+  WarningRegular,
 } from '@fluentui/react-icons';
 import { SidecarEditorDialog } from '@/components/SidecarDetails/SidecarEditorDialog';
 import { HealthBadge, LifecycleBadge } from '@/components/SidecarStatusBadge/SidecarStatusBadge';
 import { OperationProgress } from '@/components/OperationProgress/OperationProgress';
+import type { OperationLogEntry } from '@/hooks/useOperationReport';
+import { SidecarIcon } from '@/components/SidecarIcon/SidecarIcon';
 import type { SidecarConfiguration, SidecarEditModel, SidecarMutableUpdate, SidecarProgress } from '@/types/sidecar-admin-models';
 
 const useStyles = makeStyles({
   page: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXL, paddingBlock: tokens.spacingVerticalXXL },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: tokens.spacingHorizontalXL, '@media (max-width: 720px)': { alignItems: 'stretch', flexDirection: 'column' } },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXL,
+    padding: tokens.spacingHorizontalXL,
+    borderRadius: tokens.borderRadiusXLarge,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground2}, ${tokens.colorNeutralBackground1} 72%)`,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow4,
+    '@media (max-width: 720px)': { alignItems: 'stretch', flexDirection: 'column' },
+  },
+  identity: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalL },
   heading: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   badges: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   actions: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   grid: { display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)', gap: tokens.spacingHorizontalL, alignItems: 'start', '@media (max-width: 900px)': { gridTemplateColumns: '1fr' } },
   stack: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
-  card: { padding: tokens.spacingHorizontalL, gap: tokens.spacingVerticalM },
+  card: {
+    padding: tokens.spacingHorizontalL,
+    gap: tokens.spacingVerticalM,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow2,
+  },
   facts: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: tokens.spacingHorizontalL, '@media (max-width: 520px)': { gridTemplateColumns: '1fr' } },
   fact: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
   muted: { color: tokens.colorNeutralForeground2 },
@@ -57,6 +78,7 @@ const useStyles = makeStyles({
 
 interface SidecarDetailsProps {
   configuration?: SidecarConfiguration | null;
+  dataverseOrgUrl?: string;
   loading: boolean;
   busy: boolean;
   error?: string;
@@ -66,6 +88,7 @@ interface SidecarDetailsProps {
   report?: {
     active: boolean;
     progress?: SidecarProgress;
+    entries: OperationLogEntry[];
     errorCount: number;
     hasEntries: boolean;
     onDownload: () => void;
@@ -81,6 +104,7 @@ interface SidecarDetailsProps {
 
 export function SidecarDetails({
   configuration,
+  dataverseOrgUrl,
   loading,
   busy,
   error,
@@ -113,12 +137,20 @@ export function SidecarDetails({
 
   return (
     <div className={styles.page}>
-      <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onBack}>Back to portfolio</Button>
+      <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onBack}>Back to dashboard</Button>
       <section className={styles.header}>
-        <div className={styles.heading}>
-          <Title1 as="h1">{configuration.name}</Title1>
-          <Text size={400} className={styles.muted}>{configuration.appDisplayName} · {configuration.agentDisplayName}</Text>
-          <div className={styles.badges}><HealthBadge state={configuration.healthState} /><LifecycleBadge state={configuration.lifecycleState} /></div>
+        <div className={styles.identity}>
+          <SidecarIcon
+            label={configuration.name}
+            webResourceName={configuration.iconWebResourceName}
+            dataverseOrgUrl={dataverseOrgUrl}
+            size={64}
+          />
+          <div className={styles.heading}>
+            <Title1 as="h1">{configuration.name}</Title1>
+            <Text size={400} className={styles.muted}>{configuration.appDisplayName} · {configuration.agentDisplayName}</Text>
+            <div className={styles.badges}><HealthBadge state={configuration.healthState} /><LifecycleBadge state={configuration.lifecycleState} /></div>
+          </div>
         </div>
         <div className={styles.actions}>
           <SidecarEditorDialog
@@ -141,6 +173,7 @@ export function SidecarDetails({
         <OperationProgress
           active={report.active}
           progress={report.progress}
+          entries={report.entries}
           errorCount={report.errorCount}
           downloadable={report.hasEntries}
           onDownload={report.onDownload}
@@ -165,7 +198,11 @@ export function SidecarDetails({
             <Text className={styles.muted}>Runs when this page opens, after every change, and on demand. Last validated: {validationTime}</Text>
             {configuration.healthChecks.map((check) => (
               <div className={styles.healthRow} key={check.id}>
-                <CheckmarkCircleRegular className={check.state === 'pass' ? styles.healthPass : check.state === 'warning' ? styles.healthWarning : styles.healthFail} />
+                {check.state === 'pass'
+                  ? <CheckmarkCircleRegular className={styles.healthPass} aria-label="Passed" />
+                  : check.state === 'warning'
+                    ? <WarningRegular className={styles.healthWarning} aria-label="Warning" />
+                    : <DismissCircleRegular className={styles.healthFail} aria-label="Failed" />}
                 <div><Text weight="semibold">{check.label}</Text><br /><Text className={styles.muted}>{check.detail}</Text></div>
               </div>
             ))}

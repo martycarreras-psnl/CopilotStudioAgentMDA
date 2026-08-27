@@ -12,6 +12,7 @@ import {
   normalizeUploadedSidecarIcon,
   sidecarIconDataUrl,
 } from '@/lib/sidecar-icon';
+import { SidecarIcon } from '@/components/SidecarIcon/SidecarIcon';
 import type {
   SidecarIconContent,
   SidecarIconSelection,
@@ -108,9 +109,15 @@ export function SidecarIconPicker({
         </div>
       )}
       {value.source === 'default' && (
-        <MessageBar intent="info">
-          <MessageBarBody>The packaged Agent Sidecar icon will be used.</MessageBarBody>
-        </MessageBar>
+        <>
+          <div className={styles.option}>
+            <SidecarIcon label="Default Agent Sidecar" size={48} />
+            <Text>Packaged Agent Sidecar icon</Text>
+          </div>
+          <MessageBar intent="info">
+            <MessageBarBody>The packaged Agent Sidecar icon will be used.</MessageBarBody>
+          </MessageBar>
+        </>
       )}
     </div>
   );

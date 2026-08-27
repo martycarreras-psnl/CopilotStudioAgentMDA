@@ -6,6 +6,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 
 ## What's new
 
+- **🆕 Refined administration experience.** The Sidecar Dashboard now presents configured assistants as a polished visual gallery with the same pane icons users see in their model-driven apps. The guided setup adds clearer hierarchy, completed-step checkmarks, checkmarked operation accomplishments, and an editable tenant ID inferred from the signed-in Power Apps host.
 - **🆕 Durable conversations.** The sidecar saves user-visible messages in user-owned Dataverse tables, captures the real Agents SDK conversation ID, and offers a **Recent conversations** selector that resumes the agent's server-side context and replays the matching transcript.
 - **Meaningful conversation history.** Greeting-only sessions stay out of **Recent conversations** until the user sends a message, so startup noise does not crowd out useful history.
 - **List-aware analysis.** On a model-driven list, requests to analyze or process records pause for an explicit **Current view** versus **All accessible records** choice, warn about large datasets, and attach the chosen view definition only to that confirmed request.
@@ -47,8 +48,10 @@ Open the **Agent Sidecar** app and run the wizard:
 1. **Application** — pick the model-driven app to add the sidecar to.
 2. **Tables & forms** — choose the tables; expand any table to select specific forms (the **Information** form is selected by default, others are optional).
 3. **Agent** — select a published agent from the current environment. The administration app infers the environment ID, classifies the standard or GitHub Copilot harness, and generates and validates the Agents SDK endpoint. Then choose the Copilot Studio agent logo, upload a custom PNG/JPEG, or keep the default icon. Custom uploads should be square (128×128 or 256×256 recommended), no larger than 512×512 or 256 KB. SVG uploads are not accepted.
-4. **Identity** — enter the SPA app registration's **client ID** and **tenant ID**.
+4. **Identity** — enter the SPA app registration's **client ID**. The **tenant ID** is inferred from the signed-in Power Apps host and remains editable for correction.
 5. **Review & Deploy** — deploy. The app adds the sidecar to the selected forms, publishes, and verifies the result.
+
+Completed setup steps and successful lifecycle operations display checkmarks so administrators can distinguish confirmed accomplishments from pending work at a glance.
 
 After deployment, open **Manage sidecar → Edit tables & icon** to add or remove table/form associations or replace/reset the icon. The edit runs in place: configuration and pane IDs, app and agent connections, Entra identity, binding solution, and conversation history remain unchanged. The administration app refreshes the app's current forms, requires at least one selection, applies additions before removals, publishes and reads back the result, and rejects a save if another administrator changed the sidecar after the editor opened. You can also validate, reconcile drift, disable or enable, and uninstall from the same page, with live progress and a downloadable report.
 

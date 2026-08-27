@@ -104,6 +104,8 @@ export interface PublishedAgent extends AgentResolution {
 export interface AdminAccessContext {
   displayName: string;
   isSystemAdministrator: boolean;
+  tenantId?: string;
+  dataverseOrgUrl?: string;
 }
 
 export interface DeploymentImpact {

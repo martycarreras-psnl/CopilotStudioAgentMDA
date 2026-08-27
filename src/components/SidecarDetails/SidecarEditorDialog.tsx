@@ -18,7 +18,7 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components';
-import { EditRegular } from '@fluentui/react-icons';
+import { CheckmarkCircleFilled, EditRegular } from '@fluentui/react-icons';
 import { defaultFormId } from '@/lib/target-forms';
 import { SidecarIconPicker } from '@/components/SidecarWizard/SidecarIconPicker';
 import type {
@@ -51,6 +51,12 @@ const useStyles = makeStyles({
     paddingLeft: tokens.spacingHorizontalXL,
   },
   muted: { color: tokens.colorNeutralForeground2 },
+  selectionSummary: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    color: tokens.colorPaletteGreenForeground1,
+  },
 });
 
 function cloneTables(tables: TargetTable[]): TargetTable[] {
@@ -224,7 +230,10 @@ export function SidecarEditorDialog({
                       </div>
                     </div>
                   ))}
-                  <Text size={200}>{selectedFormCount} form{selectedFormCount === 1 ? '' : 's'} selected</Text>
+                  <div className={styles.selectionSummary}>
+                    <CheckmarkCircleFilled />
+                    <Text size={200}>{selectedFormCount} form{selectedFormCount === 1 ? '' : 's'} selected</Text>
+                  </div>
                 </section>
                 <section className={styles.section}>
                   <Text weight="semibold" size={400}>Sidecar icon</Text>

@@ -623,11 +623,23 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     async getAccessContext() {
       const context = await getContext();
       const users = data(await SystemusersService.getAll({ select: ['systemuserid', 'fullname'], filter: `azureactivedirectoryobjectid eq ${guid(context.user.objectId, 'Current user object ID')}`, top: 1 }), 'Resolve user');
-      if (!users[0]) return { displayName: context.user.fullName ?? context.user.userPrincipalName ?? 'Current user', isSystemAdministrator: false };
+      const environmentContext = {
+        tenantId: context.user.tenantId,
+        dataverseOrgUrl: context.app.dataverseOrgUrl,
+      };
+      if (!users[0]) return {
+        displayName: context.user.fullName ?? context.user.userPrincipalName ?? 'Current user',
+        isSystemAdministrator: false,
+        ...environmentContext,
+      };
       const roles = data(await RolesService.getAll({ select: ['roleid'], filter: `_roletemplateid_value eq ${ADMIN_ROLE_TEMPLATE}`, top: 50 }), 'Resolve administrator roles');
       const roleIds = new Set(roles.map((item) => item.roleid.toLowerCase()));
       const assignments = data(await SystemuserrolescollectionService.getAll({ select: ['roleid', 'systemuserid'], filter: `systemuserid eq ${guid(users[0].systemuserid, 'System user ID')}`, top: 500 }), 'Read role assignments');
-      return { displayName: context.user.fullName || users[0].fullname || context.user.userPrincipalName || 'Current user', isSystemAdministrator: assignments.some((item) => roleIds.has(item.roleid.toLowerCase())) };
+      return {
+        displayName: context.user.fullName || users[0].fullname || context.user.userPrincipalName || 'Current user',
+        isSystemAdministrator: assignments.some((item) => roleIds.has(item.roleid.toLowerCase())),
+        ...environmentContext,
+      };
     },
     async listConfigurations() {
       const [records, bindings] = await Promise.all([Configurations.getAll({ orderBy: ['modifiedon desc'], top: 5000 }), bindingsFor()]);

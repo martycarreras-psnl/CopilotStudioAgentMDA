@@ -16,6 +16,10 @@ _Avoid_: Installation record, deployment history, bot settings
 The persistent pane owned by one Sidecar Configuration, identified as `maftagsc_sidecar_<configuration-guid-without-dashes>` and isolated from every other pane's agent, authentication, conversation, consent, and dialog state.
 _Avoid_: App pane, shared pane, app-keyed pane
 
+**Sidecar Dashboard**:
+The administration home that presents each Sidecar Configuration as a recognizable, status-aware card using the same icon users see in the target app, with clear paths to create or manage a sidecar.
+_Avoid_: Portfolio, configuration list, operations console
+
 **Shared Form Dispatcher**:
 The single `AgentSidecar.initializeGuide` OnLoad handler and library registration shared by every enabled Sidecar Configuration bound to a form; it remains until its last enabled owner releases that form.
 _Avoid_: Configuration handler, per-sidecar form script

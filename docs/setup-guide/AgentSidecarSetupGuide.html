@@ -526,13 +526,13 @@ pac solution import --path ./AgentSidecarCore.zip \
             <figcaption><b>Figure 4.2</b> — Mapping the app's connection reference(s) in the target environment.</figcaption>
           </figure>
         </li>
-        <li><b>Open the app.</b> Play it from <b>Apps</b> (or the solution) and sign in. You should land on the <b>portfolio</b> screen, recognized as a System Administrator, with zero configured sidecars.
+        <li><b>Open the app.</b> Play it from <b>Apps</b> (or the solution) and sign in. You should land on the <b>Sidecar Dashboard</b>, recognized as a System Administrator. Existing sidecars appear as visual cards with the same pane icons users see in their model-driven apps.
           <figure class="shot">
-            <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Agent Sidecar — Portfolio</span></div>
-              <img src="img/12-app-portfolio.png" alt="Portfolio" onerror="this.closest('.shot-frame').classList.add('missing')">
-              <div class="shot-placeholder"><span class="camera">📷</span><b>Portfolio screen — "New sidecar" button</b><div class="file">Save as <code>img/12-app-portfolio.png</code></div></div>
+            <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Agent Sidecar — Dashboard</span></div>
+              <img src="img/12-app-portfolio.png" alt="Sidecar Dashboard" onerror="this.closest('.shot-frame').classList.add('missing')">
+              <div class="shot-placeholder"><span class="camera">📷</span><b>Sidecar Dashboard — "Create sidecar" button</b><div class="file">Save as <code>img/12-app-portfolio.png</code></div></div>
             </div>
-            <figcaption><b>Figure 4.3</b> — The administration portfolio. Select <b>New sidecar</b> to start the wizard.</figcaption>
+            <figcaption><b>Figure 4.3</b> — The Sidecar Dashboard. Select <b>Create sidecar</b> to start the guided setup, or <b>Manage sidecar</b> on an existing card.</figcaption>
           </figure>
         </li>
       </ol>
@@ -551,7 +551,7 @@ pac code push -s AgentSidecarCore</code></pre></div>
     <!-- WIZARD -->
     <section id="wizard">
       <h3><span class="badge">5</span> Sidecar setup wizard</h3>
-      <p class="sub">Five steps: Application &rarr; Tables &rarr; Agent &rarr; Identity &rarr; Review. Select <b>New sidecar</b> on the portfolio to begin.</p>
+      <p class="sub">Five steps: Application &rarr; Tables &rarr; Agent &rarr; Identity &rarr; Review. Select <b>Create sidecar</b> on the Sidecar Dashboard to begin. Completed steps and successful operations display checkmarks so progress stays clear.</p>
 
       <h4>Step 1 — Application</h4>
       <p>Pick the Model-driven App that will host the sidecar. Eligible apps in the environment are discovered automatically; each card shows the count of eligible tables. If an app is missing, paste its <b>App ID</b> in the manual fallback and select <b>Resolve App ID</b>.</p>
@@ -594,7 +594,7 @@ pac code push -s AgentSidecarCore</code></pre></div>
         <tr><th>Field</th><th>Value</th></tr>
         <tr><td>Configuration name</td><td>e.g. <code class="inline">Sales Assistant</code> (defaults from the app name)</td></tr>
         <tr><td>Pane title</td><td>Shown at the top of the side pane</td></tr>
-        <tr><td>Tenant ID</td><td><code class="inline val" data-bind="tenant">…</code></td></tr>
+        <tr><td>Tenant ID</td><td>Detected from the signed-in Power Apps host and kept editable for correction; expected value: <code class="inline val" data-bind="tenant">…</code></td></tr>
         <tr><td>Public Client Application ID</td><td><code class="inline val" data-bind="client">…</code> (from Phase 1)</td></tr>
         <tr><td>Pane width</td><td>e.g. <code class="inline">420</code></td></tr>
         <tr><td>Target Binding solution</td><td>Auto-suggested, e.g. <code class="inline">&lt;App&gt;SidecarBinding</code></td></tr>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Button, Text, Title3, makeStyles, tokens } from '@fluentui/react-components';
 import { AddRegular, HomeRegular, ShieldLockRegular } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { SidecarIcon } from '@/components/SidecarIcon/SidecarIcon';
 
 const useStyles = makeStyles({
   shell: { minHeight: '100vh', backgroundColor: tokens.colorNeutralBackground2 },
@@ -19,7 +20,8 @@ const useStyles = makeStyles({
     zIndex: 10,
     '@media (max-width: 720px)': { height: 'auto', alignItems: 'flex-start', flexDirection: 'column', paddingBlock: tokens.spacingVerticalM },
   },
-  brand: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS },
+  brand: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM },
+  brandText: { display: 'flex', flexDirection: 'column' },
   nav: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
   access: {
     display: 'flex',
@@ -40,8 +42,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.brand}>
-          <ShieldLockRegular />
-          <Title3>Agent Sidecar Administration</Title3>
+          <SidecarIcon label="Agent Sidecar" size={32} />
+          <div className={styles.brandText}>
+            <Title3>Agent Sidecar</Title3>
+            <Text size={200}>Administration</Text>
+          </div>
         </div>
         <nav className={styles.nav} aria-label="Administration navigation">
           <Button
@@ -49,7 +54,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             icon={<HomeRegular />}
             onClick={() => navigate('/')}
           >
-            Portfolio
+            Dashboard
           </Button>
           <Button appearance="primary" icon={<AddRegular />} onClick={() => navigate('/new')}>
             New sidecar

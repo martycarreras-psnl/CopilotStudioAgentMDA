@@ -1,13 +1,28 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { inflateRawSync } from "node:zlib";
 
 const sourceRoot = new URL("./webresources/maftagsc_/copilot/", import.meta.url);
 const solutionRoot = new URL("../solution/WebResources/maftagsc_/copilot/", import.meta.url);
+const codeAppDistRoot = new URL("../dist/", import.meta.url);
 
 async function read(root, name) {
     return readFile(new URL(name, root), "utf8");
+}
+
+async function listFiles(root, prefix = "") {
+    const entries = await readdir(root, { withFileTypes: true });
+    const files = [];
+    for (const entry of entries) {
+        const relativePath = `${prefix}${entry.name}`;
+        if (entry.isDirectory()) {
+            files.push(...await listFiles(new URL(`${entry.name}/`, root), `${relativePath}/`));
+        } else {
+            files.push(relativePath);
+        }
+    }
+    return files;
 }
 
 function readZipEntries(zip) {
@@ -317,6 +332,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         solution,
         /<RootComponent type="61" schemaName="maftagsc_\/copilot\/authRedirect\.html" behavior="0" \/>/
     );
+    assert.match(solution, /<Version>1\.0\.0\.20<\/Version>/);
 
     const packagedRuntime = [...entries.entries()].find(([name]) =>
         name.startsWith("WebResources/maftagsc_copilotagentSidePanehtml")
@@ -358,6 +374,10 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(packagedCodeApp, /List published Copilot Studio agents/);
     assert.match(packagedCodeApp, /This sidecar changed after editing began/);
     assert.match(packagedCodeApp, /__sidecar_edit_lock__/);
+    assert.match(packagedCodeApp, /Sidecar dashboard/);
+    assert.match(packagedCodeApp, /Recognize each assistant by the same icon/);
+    assert.match(packagedCodeApp, /Progress confirmed/);
+    assert.match(packagedCodeApp, /Detected/);
 
     const codeAppPackageUris = [
         ...customizations.matchAll(/<CodeAppPackageUri>([^<]+)<\/CodeAppPackageUri>/g)
@@ -372,8 +392,30 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         /\/index\.html$/,
         "Code App entry point must be the first package URI"
     );
+    const codeAppPackagePrefix = codeAppPackageUris[0].slice(0, -"index.html".length);
+    const packagedCodeAppFiles = [...entries.keys()]
+        .filter((name) => name.startsWith(codeAppPackagePrefix) && !name.endsWith("/"))
+        .sort();
+    const expectedCodeAppFiles = (await listFiles(codeAppDistRoot))
+        .map((name) => `${codeAppPackagePrefix}${name}`)
+        .sort();
+    assert.deepEqual(
+        packagedCodeAppFiles,
+        expectedCodeAppFiles,
+        "Every dist file must be packaged exactly once"
+    );
+    assert.deepEqual(
+        [...codeAppPackageUris].sort(),
+        expectedCodeAppFiles,
+        "Code App package metadata must list every dist file exactly once"
+    );
     for (const packageUri of codeAppPackageUris) {
         assert.ok(entries.has(packageUri), `Code App package file is missing: ${packageUri}`);
+        assert.deepEqual(
+            entries.get(packageUri),
+            await readFile(new URL(packageUri.slice(codeAppPackagePrefix.length), codeAppDistRoot)),
+            `Code App package file differs from dist: ${packageUri}`
+        );
     }
 });
 

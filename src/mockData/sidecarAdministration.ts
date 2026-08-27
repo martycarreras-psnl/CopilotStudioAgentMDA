@@ -35,6 +35,8 @@ export function mockTable(logicalName: string, displayName: string, formCount: n
 export const mockAdminAccess: AdminAccessContext = {
   displayName: 'Marty Carreras',
   isSystemAdministrator: true,
+  tenantId: 'd92190b9-98e7-46da-8b11-580e06c7d15d',
+  dataverseOrgUrl: 'https://example.crm.dynamics.com',
 };
 
 export const mockTargetApps: TargetModelDrivenApp[] = [

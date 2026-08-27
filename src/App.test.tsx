@@ -5,18 +5,20 @@ import { App } from './App';
 describe('Agent Sidecar Administration', () => {
   it('renders the administrator portfolio and health summary', async () => {
     render(<App />);
-    expect(await screen.findByRole('heading', { name: 'Sidecar portfolio' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Sidecar dashboard' })).toBeTruthy();
     expect(await screen.findByText('HR Management App Guide')).toBeTruthy();
     expect(screen.getByText('Field Operations Assistant')).toBeTruthy();
     expect(screen.getByText('Finance Operations Guide')).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Portfolio summary' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Dashboard summary' })).toBeTruthy();
+    expect(screen.getByAltText('HR Management App Guide sidecar icon')).toBeTruthy();
   });
 
   it('opens the create-sidecar wizard', async () => {
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Create sidecar' }));
     expect(await screen.findByRole('heading', { name: 'Create a sidecar' })).toBeTruthy();
-    expect(screen.getByText('1. Application')).toBeTruthy();
+    expect(screen.getAllByText('Application').length).toBeGreaterThan(0);
+    expect(screen.getByText('Choose the model-driven app')).toBeTruthy();
     expect(await screen.findByText('Sales Workspace')).toBeTruthy();
   });
 
@@ -43,7 +45,10 @@ describe('Agent Sidecar Administration', () => {
     expect(screen.getByText('Sidecar icon')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    fireEvent.change(screen.getByRole('textbox', { name: /Tenant ID/ }), { target: { value: 'not-a-guid' } });
+    const tenantId = screen.getByRole('textbox', { name: /Tenant ID/ }) as HTMLInputElement;
+    expect(tenantId.value).toBe('d92190b9-98e7-46da-8b11-580e06c7d15d');
+    expect(screen.getByText('Detected')).toBeTruthy();
+    fireEvent.change(tenantId, { target: { value: 'not-a-guid' } });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText('Tenant ID must be a valid GUID.')).toBeTruthy();
   });
@@ -86,7 +91,7 @@ describe('Agent Sidecar Administration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(await screen.findByText('Tables, forms, and icon updated in place.')).toBeTruthy();
+    expect((await screen.findAllByText('Tables, forms, and icon updated in place.')).length).toBeGreaterThan(0);
     expect(screen.getByText('cr0b1_HRMgmtClassic')).toBeTruthy();
   });
 });

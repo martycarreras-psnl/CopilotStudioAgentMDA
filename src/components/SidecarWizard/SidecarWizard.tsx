@@ -1,5 +1,6 @@
-import { Children, cloneElement, isValidElement, useMemo, useState, type ComponentProps, type ReactElement } from 'react';
+import { Children, cloneElement, isValidElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react';
 import {
+  Badge,
   Button,
   Card,
   Checkbox,
@@ -10,7 +11,6 @@ import {
   MessageBarBody,
   MessageBarTitle,
   Option,
-  ProgressBar,
   SpinButton,
   Spinner,
   Text,
@@ -28,6 +28,7 @@ import {
   CheckmarkCircleRegular,
   ChevronDownRegular,
   ChevronRightRegular,
+  CircleRegular,
   DatabaseRegular,
   SearchRegular,
   ShieldKeyholeRegular,
@@ -50,6 +51,13 @@ import { useDataverseFieldMetadata } from '@/hooks/use-dataverse-field-metadata'
 import { toDataverseFieldName } from '@/lib/dataverse-field-name';
 
 const steps = ['Application', 'Tables', 'Agent', 'Identity', 'Review'] as const;
+const stepDescriptions = [
+  'Choose the model-driven app',
+  'Place the pane on forms',
+  'Connect a published agent',
+  'Confirm pane identity',
+  'Verify and deploy',
+] as const;
 const CONFIG_TABLE = 'maftagsc_sidecarconfiguration';
 
 type ConfigFieldProps = Omit<ComponentProps<typeof FluentField>, 'label'> & {
@@ -90,13 +98,67 @@ function ConfigField({ label, field, required, children, ...props }: ConfigField
 
 const useStyles = makeStyles({
   page: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXL, paddingBlock: tokens.spacingVerticalXXL },
-  header: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  progress: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: tokens.spacingHorizontalS, '@media (max-width: 700px)': { gridTemplateColumns: '1fr' } },
-  progressStep: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  header: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalXL,
+    borderRadius: tokens.borderRadiusXLarge,
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground2}, ${tokens.colorNeutralBackground1} 72%)`,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  backButton: { alignSelf: 'flex-start' },
+  eyebrow: { color: tokens.colorBrandForeground1, letterSpacing: '0.08em', textTransform: 'uppercase' },
+  progress: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: tokens.spacingHorizontalXS,
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    '@media (max-width: 800px)': { gridTemplateColumns: '1fr' },
+  },
+  progressStep: {
+    display: 'grid',
+    gridTemplateColumns: '32px 1fr',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    padding: tokens.spacingHorizontalS,
+    borderRadius: tokens.borderRadiusMedium,
+  },
+  progressStepCurrent: { backgroundColor: tokens.colorBrandBackground2 },
+  stepCircle: {
+    display: 'grid',
+    placeItems: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: tokens.borderRadiusCircular,
+    color: tokens.colorNeutralForeground2,
+    backgroundColor: tokens.colorNeutralBackground3,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  stepCircleCurrent: {
+    color: tokens.colorNeutralForegroundOnBrand,
+    backgroundColor: tokens.colorBrandBackground,
+    border: `1px solid ${tokens.colorBrandBackground}`,
+  },
+  stepCircleDone: {
+    color: tokens.colorPaletteGreenForeground1,
+    backgroundColor: tokens.colorPaletteGreenBackground1,
+    border: `1px solid ${tokens.colorPaletteGreenBorder1}`,
+  },
+  stepText: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   muted: { color: tokens.colorNeutralForeground2 },
   content: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: tokens.spacingHorizontalXL, alignItems: 'start', '@media (max-width: 900px)': { gridTemplateColumns: '1fr' } },
-  panel: { padding: tokens.spacingHorizontalXL, gap: tokens.spacingVerticalL },
+  panel: {
+    padding: tokens.spacingHorizontalXL,
+    gap: tokens.spacingVerticalL,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow4,
+  },
   stack: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+  sectionIntro: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
   appGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: tokens.spacingHorizontalM },
   appCard: { padding: tokens.spacingHorizontalM, cursor: 'pointer', minHeight: '130px', position: 'relative', border: `1px solid ${tokens.colorNeutralStroke1}` },
   selectedCard: { outline: `2px solid ${tokens.colorBrandStroke1}`, backgroundColor: tokens.colorBrandBackground2 },
@@ -110,7 +172,9 @@ const useStyles = makeStyles({
   full: { gridColumnStart: 1, gridColumnEnd: 3, '@media (max-width: 650px)': { gridColumnEnd: 2 } },
   actions: { display: 'flex', justifyContent: 'space-between', gap: tokens.spacingHorizontalM },
   summary: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, position: 'sticky', top: '80px', '@media (max-width: 900px)': { position: 'static' } },
-  summaryItem: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
+  summaryItem: { display: 'grid', gridTemplateColumns: '20px 1fr', alignItems: 'start', gap: tokens.spacingHorizontalS },
+  summaryIcon: { color: tokens.colorPaletteGreenForeground1, marginTop: '2px' },
+  summaryPending: { color: tokens.colorNeutralForeground3, marginTop: '2px' },
   impact: { padding: tokens.spacingHorizontalM, gap: tokens.spacingVerticalXS },
   surface: { display: 'flex', gap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   tableToolbar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center', flexWrap: 'wrap' },
@@ -120,6 +184,7 @@ const useStyles = makeStyles({
 interface SidecarWizardProps {
   apps?: TargetModelDrivenApp[];
   appsLoading: boolean;
+  defaultTenantId?: string;
   agents?: PublishedAgent[];
   agentsLoading: boolean;
   busy: boolean;
@@ -133,6 +198,7 @@ interface SidecarWizardProps {
 export function SidecarWizard({
   apps = [],
   appsLoading,
+  defaultTenantId,
   agents = [],
   agentsLoading,
   busy,
@@ -150,7 +216,7 @@ export function SidecarWizard({
   const [manualAppId, setManualAppId] = useState('');
   const [agent, setAgent] = useState<PublishedAgent>();
   const [icon, setIcon] = useState<SidecarDraft['icon']>({ source: 'default' });
-  const [tenantId, setTenantId] = useState('');
+  const [tenantId, setTenantId] = useState(defaultTenantId ?? '');
   const [clientId, setClientId] = useState('');
   const [name, setName] = useState('');
   const [paneTitle, setPaneTitle] = useState('');
@@ -161,6 +227,10 @@ export function SidecarWizard({
   const [deploying, setDeploying] = useState(false);
   const [tableSearch, setTableSearch] = useState('');
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!tenantId && defaultTenantId) setTenantId(defaultTenantId);
+  }, [defaultTenantId, tenantId]);
 
   const enabledTableCount = tables.filter((table) => table.enabled).length;
   const enabledFormCount = tables.filter((table) => table.enabled).reduce((total, table) => total + table.forms.filter((form) => form.enabled).length, 0);
@@ -305,16 +375,30 @@ export function SidecarWizard({
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={onCancel}>Back to portfolio</Button>
+        <Button className={styles.backButton} appearance="subtle" icon={<ArrowLeftRegular />} onClick={onCancel}>Back to dashboard</Button>
+        <Text size={200} weight="semibold" className={styles.eyebrow}>Guided setup</Text>
         <Title1 as="h1">Create a sidecar</Title1>
-        <Text size={400} className={styles.muted}>A resumable setup journey for an existing Model-driven App and an existing Copilot Studio agent.</Text>
+        <Text size={400} className={styles.muted}>We discover what we can, guide each decision, and verify every change before the sidecar becomes active.</Text>
       </div>
 
       <div className={styles.progress} aria-label={`Step ${step + 1} of ${steps.length}: ${steps[step]}`}>
         {steps.map((label, index) => (
-          <div className={styles.progressStep} key={label}>
-            <Text weight={index === step ? 'semibold' : 'regular'}>{index + 1}. {label}</Text>
-            <ProgressBar value={index <= step ? 1 : 0} thickness="medium" />
+          <div
+            className={mergeClasses(styles.progressStep, index === step && styles.progressStepCurrent)}
+            key={label}
+            aria-current={index === step ? 'step' : undefined}
+          >
+            <span className={mergeClasses(
+              styles.stepCircle,
+              index === step && styles.stepCircleCurrent,
+              index < step && styles.stepCircleDone,
+            )}>
+              {index < step ? <CheckmarkCircleFilled aria-label={`${label} completed`} /> : index + 1}
+            </span>
+            <span className={styles.stepText}>
+              <Text weight={index === step ? 'semibold' : 'regular'}>{label}</Text>
+              <Text size={100} className={styles.muted}>{stepDescriptions[index]}</Text>
+            </span>
           </div>
         ))}
       </div>
@@ -325,7 +409,7 @@ export function SidecarWizard({
         <Card className={styles.panel}>
           {step === 0 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Select application</Title2><Text className={styles.muted}>Eligible Model-driven Apps are discovered from the current environment.</Text></div>
+              <div className={styles.sectionIntro}><Title2 as="h2">Select application</Title2><Text className={styles.muted}>Eligible Model-driven Apps are discovered from the current environment.</Text></div>
               {appsLoading ? <Spinner label="Discovering Model-driven Apps" /> : (
                 <div className={styles.appGrid}>
                   {apps.map((app) => (
@@ -352,7 +436,7 @@ export function SidecarWizard({
 
           {step === 1 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Select tables &amp; forms</Title2><Text className={styles.muted}>Choose the tables that should show the sidecar. All tables start off &mdash; enable only what you need. Each enabled table uses its <strong>Information</strong> form by default; expand a table to pick other forms.</Text></div>
+              <div className={styles.sectionIntro}><Title2 as="h2">Select tables &amp; forms</Title2><Text className={styles.muted}>Choose the tables that should show the sidecar. All tables start off &mdash; enable only what you need. Each enabled table uses its <strong>Information</strong> form by default; expand a table to pick other forms.</Text></div>
               <MessageBar intent="info"><MessageBarBody><MessageBarTitle>New tables require approval</MessageBarTitle>If the app gains a table, it appears in drift review as selected. Nothing changes until you approve.</MessageBarBody></MessageBar>
               <div className={styles.tableToolbar}>
                 <Input
@@ -409,7 +493,7 @@ export function SidecarWizard({
 
           {step === 2 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Select the agent</Title2><Text className={styles.muted}>Published Copilot Studio agents are discovered from this Power Platform environment. The environment and supported connection pattern are configured automatically.</Text></div>
+              <div className={styles.sectionIntro}><Title2 as="h2">Select the agent</Title2><Text className={styles.muted}>Published Copilot Studio agents are discovered from this Power Platform environment. The environment and supported connection pattern are configured automatically.</Text></div>
               <ConfigField label="Published Copilot Studio agent" required>
                 {agentsLoading ? (
                   <Spinner label="Discovering published agents" />
@@ -452,11 +536,22 @@ export function SidecarWizard({
 
           {step === 3 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Configure identity and pane</Title2><Text className={styles.muted}>Use a separate single-tenant public-client registration for this sidecar. Never create a client secret.</Text></div>
+              <div className={styles.sectionIntro}><Title2 as="h2">Configure identity and pane</Title2><Text className={styles.muted}>Use a separate single-tenant public-client registration for this sidecar. Never create a client secret.</Text></div>
               <div className={styles.fields}>
                 <ConfigField field="name" label="Configuration name" required><Input value={name} onChange={(_, data) => setName(data.value)} /></ConfigField>
                 <ConfigField field="paneTitle" label="Pane title" required><Input value={paneTitle} onChange={(_, data) => setPaneTitle(data.value)} /></ConfigField>
-                <ConfigField field="tenantId" label="Tenant ID" required><Input value={tenantId} onChange={(_, data) => setTenantId(data.value)} /></ConfigField>
+                <ConfigField
+                  field="tenantId"
+                  label="Tenant ID"
+                  required
+                  hint={defaultTenantId ? 'Detected from the signed-in Power Apps environment. You can correct it if needed.' : 'Enter the tenant used by the single-tenant SPA registration.'}
+                >
+                  <Input
+                    value={tenantId}
+                    onChange={(_, data) => setTenantId(data.value)}
+                    contentAfter={defaultTenantId && tenantId === defaultTenantId ? <Badge appearance="tint" color="success">Detected</Badge> : undefined}
+                  />
+                </ConfigField>
                 <ConfigField field="publicClientApplicationId" label="Public-client Application ID" required><Input value={clientId} onChange={(_, data) => setClientId(data.value)} placeholder="Create a separate Entra registration" /></ConfigField>
                 <ConfigField field="paneWidth" label="Pane width"><SpinButton min={320} max={600} value={paneWidth} onChange={(_, data) => setPaneWidth(data.value ?? 420)} /></ConfigField>
                 <ConfigField field="bindingSolutionUniqueName" label="Target Binding solution" required><Input value={solutionName} onChange={(_, data) => setSolutionName(data.value.replace(/[^A-Za-z0-9_]/g, ''))} /></ConfigField>
@@ -470,12 +565,13 @@ export function SidecarWizard({
 
           {step === 4 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Review deployment impact</Title2><Text className={styles.muted}>Nothing changes until a System Administrator selects Deploy sidecar.</Text></div>
+              <div className={styles.sectionIntro}><Title2 as="h2">Review deployment impact</Title2><Text className={styles.muted}>Nothing changes until a System Administrator selects Deploy sidecar.</Text></div>
               {impacts.map((impact) => <Card className={styles.impact} key={impact.title}><Text weight="semibold">{impact.title}</Text><Text>{impact.detail}</Text></Card>)}
               {deploying || report.hasEntries ? (
                 <OperationProgress
                   active={deploying}
                   progress={report.progress}
+                  entries={report.log}
                   errorCount={report.errorCount}
                   downloadable={report.hasEntries}
                   onDownload={report.download}
@@ -496,12 +592,11 @@ export function SidecarWizard({
 
         <Card className={mergeClasses(styles.panel, styles.summary)}>
           <Title3>Configuration summary</Title3>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Application</Text><Text weight="semibold">{targetApp?.displayName ?? 'Not selected'}</Text></div>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Surface</Text><Text><DatabaseRegular /> Active main forms</Text></div>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Tables</Text><Text weight="semibold">{enabledTableCount} enabled</Text></div>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Agent</Text><Text weight="semibold">{agent?.displayName ?? 'Not resolved'}</Text></div>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Icon</Text><Text weight="semibold">{icon.source === 'agent' ? 'Copilot Studio logo' : icon.source === 'uploaded' ? 'Uploaded logo' : 'Default Agent Sidecar icon'}</Text></div>
-          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Security</Text><Text><ShieldKeyholeRegular /> System Administrators only</Text></div>
+          <div className={styles.summaryItem}>{targetApp ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.summaryPending} />}<span><Text size={200} className={styles.muted}>Application</Text><br /><Text weight="semibold">{targetApp?.displayName ?? 'Not selected'}</Text></span></div>
+          <div className={styles.summaryItem}><DatabaseRegular className={enabledTableCount ? styles.summaryIcon : styles.summaryPending} /><span><Text size={200} className={styles.muted}>Placement</Text><br /><Text weight="semibold">{enabledTableCount ? `${enabledTableCount} tables · ${enabledFormCount} forms` : 'Not selected'}</Text></span></div>
+          <div className={styles.summaryItem}>{agent ? <CheckmarkCircleFilled className={styles.summaryIcon} /> : <CircleRegular className={styles.summaryPending} />}<span><Text size={200} className={styles.muted}>Published agent</Text><br /><Text weight="semibold">{agent?.displayName ?? 'Not resolved'}</Text></span></div>
+          <div className={styles.summaryItem}><CheckmarkCircleFilled className={styles.summaryIcon} /><span><Text size={200} className={styles.muted}>Icon</Text><br /><Text weight="semibold">{icon.source === 'agent' ? 'Copilot Studio logo' : icon.source === 'uploaded' ? 'Uploaded logo' : 'Default Agent Sidecar icon'}</Text></span></div>
+          <div className={styles.summaryItem}><ShieldKeyholeRegular className={styles.summaryIcon} /><span><Text size={200} className={styles.muted}>Security</Text><br /><Text weight="semibold">System Administrators only</Text></span></div>
           <Text size={200} className={styles.muted}>Knowledge authoring and publication remain outside installer scope.</Text>
         </Card>
       </div>
