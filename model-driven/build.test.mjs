@@ -295,6 +295,14 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(customizations, /maftagsc_iconwebresourcename/);
     assert.match(customizations, /maftagsc_iconcontenthash/);
     assert.match(customizations, /maftagsc_iconmimetype/);
+    assert.match(
+        customizations,
+        /"webresources":\{"entitySetName":"webresourceset","logicalName":"webresource"\}/
+    );
+    assert.match(
+        customizations,
+        /"componenttype":1,"logicalname":"webresource"/
+    );
     assert.match(customizations, /Agent Sidecar User/);
     assert.doesNotMatch(customizations, /maftagsc_sidecarconfiguration_appid_key/);
     assert.match(
