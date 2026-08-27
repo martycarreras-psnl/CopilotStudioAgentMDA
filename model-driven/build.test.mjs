@@ -363,6 +363,11 @@ test("core solution packages persistent conversation metadata and runtime", asyn
             .replace(/_ContentType_(?:application\/javascript|text\/html|text\/css)$/, "")
     );
     assert.ok(codeAppPackageUris.length > 0, "Code App package metadata is missing");
+    assert.match(
+        codeAppPackageUris[0],
+        /\/index\.html$/,
+        "Code App entry point must be the first package URI"
+    );
     for (const packageUri of codeAppPackageUris) {
         assert.ok(entries.has(packageUri), `Code App package file is missing: ${packageUri}`);
     }
