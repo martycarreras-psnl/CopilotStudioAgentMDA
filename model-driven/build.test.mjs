@@ -288,6 +288,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     );
     const entries = readZipEntries(packageBytes);
     const customizations = entries.get("customizations.xml")?.toString("utf8") ?? "";
+    const solution = entries.get("solution.xml")?.toString("utf8") ?? "";
     assert.match(customizations, /maftagsc_sidecarconversation/);
     assert.match(customizations, /maftagsc_sidecaractivity/);
     assert.match(customizations, /maftagsc_iconsource/);
@@ -299,6 +300,10 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(
         customizations,
         /<RolePrivilege name="prvDeletemaftagsc_sidecarconversation" level="Basic" \/>/
+    );
+    assert.match(
+        solution,
+        /<RootComponent type="61" schemaName="maftagsc_\/copilot\/authRedirect\.html" behavior="0" \/>/
     );
 
     const packagedRuntime = [...entries.entries()].find(([name]) =>
