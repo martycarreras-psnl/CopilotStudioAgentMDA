@@ -12,6 +12,7 @@ You stand it up by importing one solution and configuring it through an in-app w
 - **List-aware analysis.** On a model-driven list, requests to analyze or process records pause for an explicit **Current view** versus **All accessible records** choice, warn about large datasets, and attach the chosen view definition only to that confirmed request.
 - **🆕 Role-aware context.** The sidecar now passes the signed-in user's **Dataverse security-role names** to the agent alongside the page and record context, so the assistant can tailor its tone and guidance to who the person is. Roles ride in the same trusted per-message envelope as the rest of the context, so they update on sign-in and require no Copilot Studio variable setup to take effect. Roles are treated as **context only, never authorization** — the agent's knowledge stays gated by each user's own delegated permissions, only role names are used, and no role data is logged.
 - **Navigation-aware conversation.** The open pane follows the user as they move between records and forms, keeping the latest context locally without contacting the agent until the user sends a prompt or starts a new conversation.
+- **Split-view-aware context.** When a model-driven list and its selected record form are visible together, the matching open form remains the authoritative context; a true list page still uses the explicit list-analysis flow.
 - **Per-form selection.** Choose exactly which forms get the sidecar; the **Information** form is selected by default.
 
 ## What you get
@@ -146,7 +147,7 @@ sequenceDiagram
 
 ## Context synchronization
 
-The pane is deliberately long-lived. Navigating to another form does not destroy and recreate it, because doing so would lose the conversation. Instead, the launcher writes the authoritative form context locally on every navigation and the pane reads it immediately before each user message or explicit new-conversation action. Navigation by itself sends nothing to the agent.
+The pane is deliberately long-lived. Navigating to another form does not destroy and recreate it, because doing so would lose the conversation. Instead, the launcher writes the authoritative form context locally on every navigation and the pane reads it immediately before each user message or explicit new-conversation action. In a split view, the runtime corroborates that stored context against the visible form's table, record, and form identifiers before allowing it to take precedence over the adjacent list. Navigation by itself sends nothing to the agent.
 
 The context includes:
 

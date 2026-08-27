@@ -47,6 +47,10 @@ import {
     getConversationContextMismatch,
     type ConversationContextMismatch
 } from "./sidecarConversationContext";
+import {
+    chooseSidecarPageContext,
+    type SidecarFormIdentity
+} from "./sidecarPageContext";
 
 const ORIGINAL_TEXT_KEY = "hrSidecarOriginalText";
 const REPLAY_ACTIVITY_KEY = "maftagscSidecarReplay";
@@ -273,6 +277,26 @@ function getCurrentRecordName(
     return String(formEntity.getPrimaryAttributeValue?.() ?? "").slice(0, 200);
 }
 
+function getCurrentFormIdentity(hostXrm: HostXrm | null): SidecarFormIdentity | null {
+    try {
+        const formEntity = hostXrm?.Page?.data?.entity;
+        const entityName = String(formEntity?.getEntityName?.() ?? "").trim().toLowerCase();
+        const recordId = normalizeGuid(formEntity?.getId?.());
+        if (!entityName || !recordId) {
+            return null;
+        }
+        return {
+            entityName,
+            recordId,
+            formId: normalizeGuid(
+                hostXrm?.Page?.ui?.formSelector?.getCurrentItem?.()?.getId?.()
+            )
+        };
+    } catch {
+        return null;
+    }
+}
+
 function getCurrentContext(
     fallback: LaunchContext,
     configuration: SidecarConfiguration
@@ -330,9 +354,10 @@ function getCurrentContext(
     }
 }
 
-// The launcher writes authoritative form context on every form load. List pages
-// have no equivalent form event, so a supported live entity-list context may
-// override this same-origin fallback while record pages continue to prefer it.
+// The launcher writes authoritative form context on every form load. Sales Hub
+// split view reports an entity list while Xrm.Page retains the visible form;
+// a true list clears Xrm.Page.data.entity. Require matching live, shared, and
+// form identities before allowing the record to override list context.
 function readSharedContext(
     configuration: SidecarConfiguration,
     fallback: LaunchContext
@@ -371,9 +396,11 @@ function resolveContext(
     const sharedContext = readSharedContext(configuration, fallback);
     const stableContext = sharedContext ?? fallback;
     const liveContext = getCurrentContext(stableContext, configuration);
-    const resolved = !sharedContext || liveContext.pageType === "entitylist"
-        ? liveContext
-        : sharedContext;
+    const resolved = chooseSidecarPageContext(
+        sharedContext,
+        liveContext,
+        getCurrentFormIdentity(getHostXrm())
+    );
     if (
         resolved.pageType === "entityrecord" &&
         !isFormBound(configuration, resolved.entityName, resolved.formId)

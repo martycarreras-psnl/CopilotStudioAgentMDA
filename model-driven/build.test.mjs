@@ -205,7 +205,8 @@ test("live page context replaces stale record details before each message", asyn
     assert.match(source, /viewType/);
     assert.match(source, /resolveListAnalysisSelection/);
     assert.match(source, /isListAnalysisRequest/);
-    assert.match(source, /liveContext\.pageType === "entitylist"/);
+    assert.match(source, /chooseSidecarPageContext\(/);
+    assert.match(source, /getCurrentFormIdentity\(getHostXrm\(\)\)/);
     assert.match(source, /delete forwardedChannelData\[LIST_ANALYSIS_SELECTION_KEY\]/);
     assert.match(source, /currentContext\.entityName === requestedListAnalysisSelection\.tableLogicalName/);
     assert.doesNotMatch(source, /startNavigationWatcher/);
@@ -332,7 +333,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         solution,
         /<RootComponent type="61" schemaName="maftagsc_\/copilot\/authRedirect\.html" behavior="0" \/>/
     );
-    assert.match(solution, /<Version>1\.0\.0\.24<\/Version>/);
+    assert.match(solution, /<Version>1\.0\.0\.25<\/Version>/);
 
     const packagedRuntime = [...entries.entries()].find(([name]) =>
         name.startsWith("WebResources/maftagsc_copilotagentSidePanehtml")
