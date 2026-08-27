@@ -49,6 +49,25 @@ interface DataverseWebApi {
     ): Promise<DataverseResult>;
 }
 
+export const DEFAULT_SIDECAR_ICON =
+    "WebResources/maftagsc_/copilot/agentGuideLibrary.svg";
+
+export function resolveSidecarIconWebResource(
+    value: unknown,
+    configurationId: string
+): string {
+    const name = String(value ?? "").trim();
+    const configurationKey = configurationId.replace(/-/g, "");
+    const expectedPrefix = `maftagsc_/sidecars/${configurationKey}/`;
+    if (
+        name.startsWith(expectedPrefix)
+        && /^icon_[0-9a-f]{16}\.(?:png|jpg)$/i.test(name.slice(expectedPrefix.length))
+    ) {
+        return `WebResources/${name}`;
+    }
+    return DEFAULT_SIDECAR_ICON;
+}
+
 export class DataverseSidecarConfigurationRepository
 implements SidecarConfigurationRepository {
     constructor(private readonly getWebApi: () => DataverseWebApi) {}
@@ -62,7 +81,7 @@ implements SidecarConfigurationRepository {
         const escapedAppId = normalizedAppId.replace(/'/g, "''");
         const configurationResult = await this.getWebApi().retrieveMultipleRecords(
             "maftagsc_sidecarconfiguration",
-            `?$select=maftagsc_sidecarconfigurationid,maftagsc_appid,maftagsc_panetitle,maftagsc_panewidth,maftagsc_publicclientapplicationid,maftagsc_tenantid,maftagsc_environmentid,maftagsc_agentschemaname,maftagsc_agentconnectionstring,statecode,statuscode&$filter=maftagsc_appid eq '${escapedAppId}' and statecode eq 0`,
+            `?$select=maftagsc_sidecarconfigurationid,maftagsc_appid,maftagsc_panetitle,maftagsc_panewidth,maftagsc_publicclientapplicationid,maftagsc_tenantid,maftagsc_environmentid,maftagsc_agentschemaname,maftagsc_agentconnectionstring,maftagsc_iconwebresourcename,statecode,statuscode&$filter=maftagsc_appid eq '${escapedAppId}' and statecode eq 0`,
             50
         );
         const configurations: Array<SidecarConfiguration | null> = await Promise.all(
@@ -96,7 +115,10 @@ implements SidecarConfigurationRepository {
                     paneTitle: String(record.maftagsc_panetitle ?? "Agent Sidecar"),
                     paneWidth: Number(record.maftagsc_panewidth ?? 420),
                     webResourceName: "maftagsc_/copilot/agentSidePane.html",
-                    iconWebResource: "WebResources/maftagsc_/copilot/agentGuideLibrary.svg",
+                    iconWebResource: resolveSidecarIconWebResource(
+                        record.maftagsc_iconwebresourcename,
+                        configurationId
+                    ),
                     clientId: String(record.maftagsc_publicclientapplicationid ?? ""),
                     tenantId: String(record.maftagsc_tenantid ?? ""),
                     environmentId: String(record.maftagsc_environmentid ?? ""),

@@ -44,6 +44,7 @@ import { isGuid } from '@/utils/agent-link';
 import { defaultFormId } from '@/lib/target-forms';
 import { DataverseFieldLabel } from '@/components/DataverseFieldLabel';
 import { OperationProgress } from '@/components/OperationProgress/OperationProgress';
+import { SidecarIconPicker } from '@/components/SidecarWizard/SidecarIconPicker';
 import { useOperationReport } from '@/hooks/useOperationReport';
 import { useDataverseFieldMetadata } from '@/hooks/use-dataverse-field-metadata';
 import { toDataverseFieldName } from '@/lib/dataverse-field-name';
@@ -148,6 +149,7 @@ export function SidecarWizard({
   const [agentLink, setAgentLink] = useState('');
   const [agentEnvironmentId, setAgentEnvironmentId] = useState('');
   const [agent, setAgent] = useState<AgentResolution>();
+  const [icon, setIcon] = useState<SidecarDraft['icon']>({ source: 'default' });
   const [tenantId, setTenantId] = useState('');
   const [clientId, setClientId] = useState('');
   const [name, setName] = useState('');
@@ -215,8 +217,9 @@ export function SidecarWizard({
       paneTitle,
       paneWidth,
       bindingSolutionUniqueName: solutionName,
+      icon,
     };
-  }, [agent, agentLink, clientId, name, paneTitle, paneWidth, solutionName, tables, targetApp, tenantId]);
+  }, [agent, agentLink, clientId, icon, name, paneTitle, paneWidth, solutionName, tables, targetApp, tenantId]);
 
   const selectApp = (app: TargetModelDrivenApp) => {
     setTargetApp(app);
@@ -268,7 +271,14 @@ export function SidecarWizard({
       setLocalError('Enter the Environment ID from Copilot Studio Settings > Advanced > Metadata.');
       return;
     }
-    try { setAgent(await onResolveAgent(agentLink, agentEnvironmentId)); setLocalError(undefined); }
+    try {
+      const resolved = await onResolveAgent(agentLink, agentEnvironmentId);
+      setAgent(resolved);
+      setIcon(resolved.icon
+        ? { source: 'agent', content: resolved.icon }
+        : { source: 'default' });
+      setLocalError(undefined);
+    }
     catch (caught) { setAgent(undefined); setLocalError(caught instanceof Error ? caught.message : 'Agent resolution failed.'); }
   };
 
@@ -404,13 +414,27 @@ export function SidecarWizard({
             <div className={styles.stack}>
               <div><Title2 as="h2">Connect the agent</Title2><Text className={styles.muted}>In Copilot Studio, open the published agent, then go to Channels &gt; Web app. Under Microsoft 365 Agents SDK, copy the connection string—not the public iframe embed code.</Text></div>
               <ConfigField field="agentConnectionString" label="Microsoft 365 Agents SDK connection string" hint="Paste the full standard- or GitHub-harness URL exactly as Copilot Studio provides it." required>
-                <Textarea resize="vertical" value={agentLink} onChange={(_, data) => { setAgentLink(data.value); setAgent(undefined); }} placeholder="Paste the connection string from Channels > Web app" />
+                <Textarea resize="vertical" value={agentLink} onChange={(_, data) => { setAgentLink(data.value); setAgent(undefined); setIcon({ source: 'default' }); }} placeholder="Paste the connection string from Channels > Web app" />
               </ConfigField>
               <ConfigField field="environmentId" label="Environment ID" hint="Copy this GUID from Copilot Studio Settings > Advanced > Metadata." required>
-                <Input value={agentEnvironmentId} onChange={(_, data) => { setAgentEnvironmentId(data.value); setAgent(undefined); }} placeholder="00000000-0000-0000-0000-000000000000" />
+                <Input value={agentEnvironmentId} onChange={(_, data) => { setAgentEnvironmentId(data.value); setAgent(undefined); setIcon({ source: 'default' }); }} placeholder="00000000-0000-0000-0000-000000000000" />
               </ConfigField>
               <Button appearance="primary" icon={<BotRegular />} onClick={resolveAgent} disabled={busy}>Resolve agent</Button>
               {agent && <MessageBar intent="success"><MessageBarBody><MessageBarTitle>{agent.displayName}</MessageBarTitle>{agent.schemaName} · published · environment {agent.environmentId}</MessageBarBody></MessageBar>}
+              {agent && (
+                <ConfigField
+                  field="iconSource"
+                  label="Sidecar icon"
+                  hint="The selected image is copied into the sidecar's Target Binding solution. Existing panes refresh after the Model-driven App is reloaded."
+                >
+                  <SidecarIconPicker
+                    agentIcon={agent.icon}
+                    value={icon}
+                    onChange={setIcon}
+                    onError={setLocalError}
+                  />
+                </ConfigField>
+              )}
             </div>
           )}
 
@@ -464,6 +488,7 @@ export function SidecarWizard({
           <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Surface</Text><Text><DatabaseRegular /> Active main forms</Text></div>
           <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Tables</Text><Text weight="semibold">{enabledTableCount} enabled</Text></div>
           <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Agent</Text><Text weight="semibold">{agent?.displayName ?? 'Not resolved'}</Text></div>
+          <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Icon</Text><Text weight="semibold">{icon.source === 'agent' ? 'Copilot Studio logo' : icon.source === 'uploaded' ? 'Uploaded logo' : 'Default Agent Sidecar icon'}</Text></div>
           <div className={styles.summaryItem}><Text size={200} className={styles.muted}>Security</Text><Text><ShieldKeyholeRegular /> System Administrators only</Text></div>
           <Text size={200} className={styles.muted}>Knowledge authoring and publication remain outside installer scope.</Text>
         </Card>

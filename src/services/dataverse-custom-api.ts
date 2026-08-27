@@ -36,6 +36,18 @@ export async function publishTables(tableLogicalNames: string[]): Promise<void> 
   }
 }
 
+export async function publishWebResources(webResourceIds: string[]): Promise<void> {
+  const webResources = [...new Set(webResourceIds)]
+    .map((id) => `<webresource>{${id.replace(/[{}]/g, '')}}</webresource>`)
+    .join('');
+  const result = await PublishXmlService.PublishXml(
+    `<importexportxml><webresources>${webResources}</webresources></importexportxml>`,
+  );
+  if (result.error) {
+    throw new Error(`PublishXml failed: ${errorMessage(result.error)}`);
+  }
+}
+
 export async function addSolutionComponent(
   solutionUniqueName: string,
   componentId: string,

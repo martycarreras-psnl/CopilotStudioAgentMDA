@@ -19,6 +19,7 @@ export * as SolutionsModel from './models/SolutionsModel';
 export * as SystemformsModel from './models/SystemformsModel';
 export * as SystemuserrolescollectionModel from './models/SystemuserrolescollectionModel';
 export * as SystemusersModel from './models/SystemusersModel';
+export * as WebresourcesetModel from './models/WebresourcesetModel';
 
 // Services
 export * from './services/AddSolutionComponentService';
@@ -35,3 +36,4 @@ export * from './services/SolutionsService';
 export * from './services/SystemformsService';
 export * from './services/SystemuserrolescollectionService';
 export * from './services/SystemusersService';
+export * from './services/WebresourcesetService';

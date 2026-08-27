@@ -46,7 +46,7 @@ Open the **Agent Sidecar** app and run the wizard:
 
 1. **Application** — pick the model-driven app to add the sidecar to.
 2. **Tables & forms** — choose the tables; expand any table to select specific forms (the **Information** form is selected by default, others are optional).
-3. **Agent** — paste your agent's Agents SDK connection string and environment ID.
+3. **Agent** — paste your agent's Agents SDK connection string and environment ID, then choose the Copilot Studio agent logo, upload a custom PNG/JPEG, or keep the default icon. Custom uploads should be square (128×128 or 256×256 recommended), no larger than 512×512 or 256 KB. SVG uploads are not accepted.
 4. **Identity** — enter the SPA app registration's **client ID** and **tenant ID**.
 5. **Review & Deploy** — deploy. The app adds the sidecar to the selected forms, publishes, and verifies the result. From the same app you can later disable, reconcile drift, or uninstall — each with live progress and a downloadable report.
 

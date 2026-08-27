@@ -290,6 +290,10 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     const customizations = entries.get("customizations.xml")?.toString("utf8") ?? "";
     assert.match(customizations, /maftagsc_sidecarconversation/);
     assert.match(customizations, /maftagsc_sidecaractivity/);
+    assert.match(customizations, /maftagsc_iconsource/);
+    assert.match(customizations, /maftagsc_iconwebresourcename/);
+    assert.match(customizations, /maftagsc_iconcontenthash/);
+    assert.match(customizations, /maftagsc_iconmimetype/);
     assert.match(customizations, /Agent Sidecar User/);
     assert.doesNotMatch(customizations, /maftagsc_sidecarconfiguration_appid_key/);
     assert.match(
@@ -323,6 +327,16 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         packagedIcon,
         await readFile(new URL("agentGuideLibrary.svg", sourceRoot))
     );
+
+    const packagedCodeApp = [...entries.entries()]
+        .filter(([name]) =>
+            name.startsWith("CanvasApps/maftagsc_agentsidecar_")
+            && name.endsWith(".js")
+        )
+        .map(([, value]) => value.toString("utf8"))
+        .join("\n");
+    assert.match(packagedCodeApp, /maftagsc_iconwebresourcename/);
+    assert.match(packagedCodeApp, /Copilot Studio agent logo/);
 });
 
 test("authentication redirect completes sign-in via a same-origin localStorage handshake", async () => {

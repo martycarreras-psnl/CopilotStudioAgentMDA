@@ -36,6 +36,10 @@ export interface Maftagsc_sidecarconfigurationsBase {
   maftagsc_bindingsolutionuniquename: string;
   maftagsc_environmentid: string;
   maftagsc_healthstate: Maftagsc_sidecarconfigurationsmaftagsc_healthstate;
+  maftagsc_iconcontenthash?: string;
+  maftagsc_iconmimetype?: string;
+  maftagsc_iconsource?: string;
+  maftagsc_iconwebresourcename?: string;
   maftagsc_lastoperationsummary?: string;
   maftagsc_lastvalidatedat?: string;
   maftagsc_name: string;

@@ -3,7 +3,7 @@
   "appId": "71d3fa20-9990-4622-9775-11b56f2ed893",
   "appDisplayName": "Agent Sidecar",
   "region": "prod",
-  "environmentId": "f9b87f8b-0abf-e629-affb-b13195d1ed14",
+  "environmentId": "7d8dcd87-2e21-e805-b9be-678794ecc80b",
   "description": " ",
   "buildPath": "./dist",
   "buildEntryPoint": "index.html",
@@ -13,10 +13,6 @@
   "databaseReferences": {
     "default.cds": {
       "dataSources": {
-        "sidecarconfigurations": {
-          "entitySetName": "maftagsc_sidecarconfigurations",
-          "logicalName": "maftagsc_sidecarconfiguration"
-        },
         "targetbindings": {
           "entitySetName": "maftagsc_targetbindings",
           "logicalName": "maftagsc_targetbinding"
@@ -66,6 +62,14 @@
           "entitySetName": "entities",
           "logicalName": "entity",
           "isHidden": false
+        },
+        "sidecarconfigurations": {
+          "entitySetName": "maftagsc_sidecarconfigurations",
+          "logicalName": "maftagsc_sidecarconfiguration"
+        },
+        "webresources": {
+          "entitySetName": "webresourceset",
+          "logicalName": "webresource"
         }
       },
       "environmentVariableName": ""

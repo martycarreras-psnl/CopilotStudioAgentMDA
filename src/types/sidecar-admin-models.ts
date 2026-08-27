@@ -1,6 +1,21 @@
 export type SidecarLifecycleState = 'draft' | 'deployed' | 'disabled' | 'drift';
 export type SidecarHealthState = 'healthy' | 'warning' | 'critical' | 'notValidated';
 export type SidecarSurface = 'forms' | 'lists';
+export type SidecarIconSource = 'default' | 'agent' | 'uploaded';
+export type SidecarIconMimeType = 'image/png' | 'image/jpeg';
+
+export interface SidecarIconContent {
+  base64: string;
+  mimeType: SidecarIconMimeType;
+  width: number;
+  height: number;
+  contentHash: string;
+}
+
+export interface SidecarIconSelection {
+  source: SidecarIconSource;
+  content?: SidecarIconContent;
+}
 
 export interface TargetForm {
   formId: string;
@@ -54,6 +69,10 @@ export interface SidecarConfiguration {
   publicClientApplicationId: string;
   environmentId: string;
   bindingSolutionUniqueName: string;
+  iconSource: SidecarIconSource;
+  iconWebResourceName?: string;
+  iconContentHash?: string;
+  iconMimeType?: string;
   lifecycleState: SidecarLifecycleState;
   healthState: SidecarHealthState;
   enabledSurfaces: SidecarSurface[];
@@ -70,6 +89,7 @@ export interface AgentResolution {
   schemaName: string;
   environmentId: string;
   published: boolean;
+  icon?: SidecarIconContent;
 }
 
 export interface AdminAccessContext {
@@ -83,7 +103,7 @@ export interface DeploymentImpact {
   intent: 'info' | 'change' | 'safety';
 }
 
-export type SidecarOperationPhase = 'forms' | 'publish' | 'readback' | 'finalize' | 'cleanup' | 'rollback';
+export type SidecarOperationPhase = 'icon' | 'forms' | 'publish' | 'readback' | 'finalize' | 'cleanup' | 'rollback';
 
 export interface SidecarProgress {
   phase: SidecarOperationPhase;
@@ -105,4 +125,5 @@ export interface SidecarDraft {
   paneTitle: string;
   paneWidth: number;
   bindingSolutionUniqueName: string;
+  icon: SidecarIconSelection;
 }

@@ -12,17 +12,32 @@ import { SystemusersService } from '@/generated/services/SystemusersService';
 import { Maftagsc_sidecarconfigurationsmaftagsc_healthstate as HealthOptions, Maftagsc_sidecarconfigurationsstatuscode as StatusOptions, type Maftagsc_sidecarconfigurations } from '@/generated/models/Maftagsc_sidecarconfigurationsModel';
 import { Maftagsc_targetbindingsmaftagsc_validationstate as ValidationOptions, type Maftagsc_targetbindings } from '@/generated/models/Maftagsc_targetbindingsModel';
 import type { SidecarAdministrationProvider } from '@/services/sidecar-admin-contracts';
-import { addSolutionComponent, assertSidecarActionsAvailable, publishTables } from '@/services/dataverse-custom-api';
+import {
+  addSolutionComponent,
+  assertSidecarActionsAvailable,
+  publishTables,
+  publishWebResources,
+} from '@/services/dataverse-custom-api';
 import type { SidecarConfiguration, SidecarDraft, SidecarHealthCheck, SidecarHealthState, SidecarLifecycleState, SidecarProgressCallback, TargetModelDrivenApp, TargetTable } from '@/types/sidecar-admin-models';
 import { parseCopilotStudioConnectionString } from '@/utils/agent-link';
 import { discoverAppForms, type DiscoveredForm } from '@/services/model-driven-app-discovery';
 import { isInformationFormName } from '@/lib/target-forms';
 import { hasOtherEnabledFormOwner } from '@/lib/shared-form-owner';
+import {
+  inspectSidecarIconBase64,
+  sidecarIconWebResourceName,
+} from '@/lib/sidecar-icon';
+import {
+  createSidecarIconWebResource,
+  deleteSidecarIconWebResource,
+  listSidecarIconWebResources,
+} from '@/services/sidecar-icon-web-resource';
 
 const ADMIN_ROLE_TEMPLATE = '627090ff-40a3-4053-8790-584edc5be201';
 const SIDECAR_PUBLISHER = 'agentsidecar';
 const LIBRARY = 'maftagsc_/copilot/agentSidePane.js';
 const HANDLER = 'AgentSidecar.initializeGuide';
+const ICON_OWNER_ROOT = 'maftagsc_/sidecars/';
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Result<T> = { data?: T; error?: unknown };
 type Form = DiscoveredForm;
@@ -54,6 +69,12 @@ function guid(value: string | undefined, label: string): string {
 }
 function odataString(value: string): string {
   return value.trim().replace(/'/g, "''");
+}
+function isOwnedIconName(value: string | undefined, configurationId: string): value is string {
+  if (!value) return false;
+  const key = guid(configurationId, 'Configuration ID').replace(/-/g, '');
+  return value.startsWith(`${ICON_OWNER_ROOT}${key}/`)
+    && /^icon_[0-9a-f]{16}\.(?:png|jpg)$/i.test(value.slice(`${ICON_OWNER_ROOT}${key}/`.length));
 }
 const HEALTH = {
   none: option(HealthOptions, 'NotValidated'), healthy: option(HealthOptions, 'Healthy'),
@@ -169,6 +190,12 @@ function map(record: Maftagsc_sidecarconfigurations, bindings: Maftagsc_targetbi
     agentConnectionString: record.maftagsc_agentconnectionstring, tenantId: record.maftagsc_tenantid,
     publicClientApplicationId: record.maftagsc_publicclientapplicationid, environmentId: record.maftagsc_environmentid,
     bindingSolutionUniqueName: record.maftagsc_bindingsolutionuniquename, lifecycleState: lifecycle(record), healthState,
+    iconSource: record.maftagsc_iconsource === 'agent' || record.maftagsc_iconsource === 'uploaded'
+      ? record.maftagsc_iconsource
+      : 'default',
+    iconWebResourceName: record.maftagsc_iconwebresourcename,
+    iconContentHash: record.maftagsc_iconcontenthash,
+    iconMimeType: record.maftagsc_iconmimetype,
     enabledSurfaces: ['forms'], autoEnableNewTables: record.maftagsc_autoenablenewtables,
     tables: [...tables.values()],
     driftItems: healthState === 'warning' ? [{ id: 'form-drift', kind: 'conflict', title: 'Live form metadata differs from the approved binding', detail: 'Review and approve reconciliation before changing live metadata.' }] : [],
@@ -236,6 +263,76 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       'publisherid@odata.bind': `/publishers(${publisherId})`,
     } as unknown as Parameters<typeof SolutionsService.create>[0]), 'Create Target Binding solution');
     return created.solutionid;
+  }
+  async function provisionIcon(
+    draft: SidecarDraft,
+    configurationId: string,
+    onProgress?: SidecarProgressCallback,
+  ): Promise<string | undefined> {
+    if (draft.icon.source === 'default') return undefined;
+    if (!draft.icon.content) throw new Error('The selected sidecar icon is unavailable.');
+    onProgress?.({ phase: 'icon', current: 0, total: 1, label: 'Publishing sidecar icon' });
+    const name = sidecarIconWebResourceName(configurationId, draft.icon.content);
+    const created = data(await createSidecarIconWebResource({
+      name,
+      displayname: `${draft.name.trim()} icon`,
+      description: `Agent Sidecar icon owned by configuration ${guid(configurationId, 'Configuration ID')}.`,
+      content: draft.icon.content.base64,
+      webresourcetype: draft.icon.content.mimeType === 'image/png' ? 5 : 6,
+    }), 'Create sidecar icon web resource');
+    try {
+      await addSolutionComponent(draft.bindingSolutionUniqueName.trim(), created.webresourceid, 61);
+      await publishWebResources([created.webresourceid]);
+      const readBack = data(await listSidecarIconWebResources({
+        select: ['webresourceid', 'name', 'content', 'webresourcetype'],
+        filter: `webresourceid eq ${guid(created.webresourceid, 'Web resource ID')}`,
+        top: 1,
+      }), 'Read back sidecar icon web resource')[0];
+      if (
+        !readBack
+        || readBack.name !== name
+        || readBack.content !== draft.icon.content.base64
+      ) {
+        throw new Error('The sidecar icon web resource failed read-back validation.');
+      }
+      data(await Configurations.update(configurationId, {
+        maftagsc_iconsource: draft.icon.source,
+        maftagsc_iconwebresourcename: name,
+        maftagsc_iconcontenthash: draft.icon.content.contentHash,
+        maftagsc_iconmimetype: draft.icon.content.mimeType,
+      }), 'Save sidecar icon metadata');
+    } catch (error) {
+      await deleteSidecarIconWebResource(created.webresourceid).catch(() => undefined);
+      throw error;
+    }
+    onProgress?.({ phase: 'icon', current: 1, total: 1, label: 'Publishing sidecar icon' });
+    return created.webresourceid;
+  }
+  async function deleteOwnedIcon(
+    record: Maftagsc_sidecarconfigurations,
+  ): Promise<void> {
+    await deleteOwnedIconName(
+      record.maftagsc_iconwebresourcename,
+      record.maftagsc_sidecarconfigurationid,
+    );
+  }
+  async function deleteOwnedIconName(
+    name: string | undefined,
+    configurationId: string,
+  ): Promise<void> {
+    if (!isOwnedIconName(name, configurationId)) {
+      return;
+    }
+    const resources = data(await listSidecarIconWebResources({
+      select: ['webresourceid', 'name'],
+      filter: `name eq '${odataString(name)}'`,
+      top: 2,
+    }), 'Find owned sidecar icon');
+    for (const resource of resources) {
+      if (resource.name === name) {
+        await deleteSidecarIconWebResource(resource.webresourceid);
+      }
+    }
   }
   async function validate(id: string): Promise<SidecarConfiguration> {
     const configurationId = guid(id, 'Configuration ID');
@@ -361,10 +458,18 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     async resolveAgentLink(connectionString, environmentId) {
       const parsed = parseCopilotStudioConnectionString(connectionString, environmentId); const context = await getContext();
       if (context.app.environmentId.toLowerCase() !== parsed.environmentId.toLowerCase()) throw new Error('The Copilot Studio agent must belong to the Code App environment.');
-      const agents = data(await BotsService.getAll({ select: ['name', 'schemaname', 'publishedon'], filter: `schemaname eq '${odataString(parsed.schemaName)}' and statecode eq 0`, top: 1 }), 'Resolve agent');
+      const agents = data(await BotsService.getAll({ select: ['name', 'schemaname', 'publishedon', 'iconbase64'], filter: `schemaname eq '${odataString(parsed.schemaName)}' and statecode eq 0`, top: 1 }), 'Resolve agent');
       if (!agents[0]) throw new Error(`No active Copilot Studio agent named ${parsed.schemaName} was found.`);
       if (!agents[0].publishedon) throw new Error(`Copilot Studio agent ${parsed.schemaName} is not published.`);
-      return { ...parsed, displayName: agents[0].name || parsed.displayName, published: true };
+      let icon;
+      if (agents[0].iconbase64) {
+        try {
+          icon = await inspectSidecarIconBase64(agents[0].iconbase64);
+        } catch {
+          icon = undefined;
+        }
+      }
+      return { ...parsed, displayName: agents[0].name || parsed.displayName, published: true, icon };
     },
     async previewDeployment(draft) {
       const selected = draft.tables.filter((item) => item.enabled);
@@ -373,6 +478,15 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
         { title: 'Create or reuse the Target Binding solution', detail: `${draft.bindingSolutionUniqueName} will own selected form components.`, intent: 'change' },
         { title: `Bind ${selected.length} tables and ${count} active main forms`, detail: 'The launcher is added idempotently with an owned handler identifier.', intent: 'change' },
         { title: 'Reuse the existing Copilot Studio agent', detail: `${draft.agent.displayName} is referenced; no agent is created.`, intent: 'info' },
+        {
+          title: draft.icon.source === 'default' ? 'Use the packaged sidecar icon' : 'Publish a configuration-specific sidecar icon',
+          detail: draft.icon.source === 'agent'
+            ? 'The Copilot Studio agent logo will be copied into the Target Binding solution.'
+            : draft.icon.source === 'uploaded'
+              ? 'The normalized uploaded logo will be copied into the Target Binding solution.'
+              : 'No additional image web resource will be created.',
+          intent: draft.icon.source === 'default' ? 'info' : 'change',
+        },
         { title: 'Automatic rollback', detail: 'Failure removes only newly-added sidecar handlers and preserves unrelated form XML.', intent: 'safety' },
       ];
     },
@@ -402,6 +516,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
           maftagsc_agentconnectionstring: draft.agentConnectionString.trim(), maftagsc_tenantid: tenantId,
           maftagsc_publicclientapplicationid: clientId, maftagsc_environmentid: environmentId,
           maftagsc_bindingsolutionuniquename: draft.bindingSolutionUniqueName.trim(), maftagsc_autoenablenewtables: true,
+          maftagsc_iconsource: draft.icon.source,
           maftagsc_healthstate: HEALTH.none, maftagsc_lastoperationsummary: 'Deployment is in progress.', statecode: 0, statuscode: STATUS.draft,
       }), 'Create configuration');
       const enabledAfterCreate = data(await Configurations.getAll({
@@ -427,7 +542,13 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       const addedHandlers = new Map<string, string>();
       const createdBindings: Array<{ bindingId: string; formId: string }> = [];
       const tables: string[] = [];
+      let createdIconId: string | undefined;
       try {
+        createdIconId = await provisionIcon(
+          draft,
+          created.maftagsc_sidecarconfigurationid,
+          onProgress,
+        );
         let processed = 0;
         for (const { table, form } of selectedForms) {
           onProgress?.({ phase: 'forms', current: processed, total: selectedForms.length, label: `${table.displayName} — ${form.name}` });
@@ -471,6 +592,37 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
         }
         if (tables.length) await publishTables(tables).catch(() => undefined);
         await Promise.all(createdBindings.map(({ bindingId }) => Bindings.delete(bindingId).catch(() => undefined)));
+        let iconRollbackError: unknown;
+        if (draft.icon.content) {
+          try {
+            await deleteOwnedIconName(
+              sidecarIconWebResourceName(
+                created.maftagsc_sidecarconfigurationid,
+                draft.icon.content,
+              ),
+              created.maftagsc_sidecarconfigurationid,
+            );
+          } catch (cleanupError) {
+            iconRollbackError = cleanupError;
+          }
+        } else if (createdIconId) {
+          try {
+            await deleteSidecarIconWebResource(createdIconId);
+          } catch (cleanupError) {
+            iconRollbackError = cleanupError;
+          }
+        }
+        if (iconRollbackError) {
+          await Configurations.update(created.maftagsc_sidecarconfigurationid, {
+            maftagsc_healthstate: HEALTH.critical,
+            maftagsc_lastoperationsummary: `Deployment failed and icon cleanup is incomplete: ${message(iconRollbackError)}`,
+            statuscode: STATUS.draft,
+          }).catch(() => undefined);
+          throw new Error(
+            `Deployment failed and rollback could not remove the configuration-owned icon. `
+            + `The draft configuration and Target Binding solution were retained for recovery: ${message(error)}`,
+          );
+        }
         await Configurations.delete(created.maftagsc_sidecarconfigurationid).catch(() => undefined);
         await SolutionsService.delete(bindingSolutionId).catch(() => undefined);
         throw new Error(`Deployment failed and rollback was attempted: ${message(error)}`);
@@ -517,8 +669,9 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       const configurationId = guid(id, 'Configuration ID');
       const configuration = data(await Configurations.get(configurationId), 'Read configuration');
       const bindings = await mutate(configurationId, 'remove', onProgress);
-      onProgress?.({ phase: 'cleanup', current: 0, total: 1, label: 'Removing bindings and configuration' });
+      onProgress?.({ phase: 'cleanup', current: 0, total: 1, label: 'Removing bindings, icon, and configuration' });
       await Promise.all(bindings.map((binding) => Bindings.delete(binding.maftagsc_targetbindingid)));
+      await deleteOwnedIcon(configuration);
       await Configurations.delete(configurationId);
       const ownershipMarker = bindingSolutionMarker(configuration.maftagsc_appid, configurationId);
       const legacyOwnershipMarker = `Agent Sidecar Target Binding for app ${guid(configuration.maftagsc_appid, 'Model-driven App ID')}`;
@@ -549,7 +702,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       ) {
         await SolutionsService.delete(ownedSolution.solutionid);
       }
-      onProgress?.({ phase: 'cleanup', current: 1, total: 1, label: 'Removing bindings and configuration' });
+      onProgress?.({ phase: 'cleanup', current: 1, total: 1, label: 'Removing bindings, icon, and configuration' });
     },
   };
 }

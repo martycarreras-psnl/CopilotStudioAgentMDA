@@ -152,7 +152,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "56142d44-d17c-f111-ab0e-000d3a34087e",
+          "x-ms-optionsetmetadataid": "87ddd7f8-577e-f111-ab0e-0022480402a6",
           "x-ms-isGlobal": false,
           "x-ms-optionsetdisplayname": "Propose New Tables",
           "x-ms-optionSetType": "Boolean"
@@ -208,7 +208,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "1bbc1309-d17c-f111-ab0e-000d3a34006b",
+          "x-ms-optionsetmetadataid": "c94e187c-7db3-4687-8c8e-8bd9f6e8e9f9",
           "x-ms-isGlobal": true,
           "x-ms-optionsetdisplayname": "Sidecar Health State",
           "x-ms-optionSetType": "Picklist"
@@ -220,6 +220,38 @@
           "x-ms-dataverse-type": "VirtualType",
           "x-ms-schema-name": "maftagsc_healthstateName",
           "x-ms-read-only": true
+        },
+        "maftagsc_iconcontenthash": {
+          "type": "string",
+          "title": "Icon Content Hash",
+          "x-ms-dataverse-attribute": "maftagsc_iconcontenthash",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "maftagsc_iconcontenthash",
+          "maxLength": 128
+        },
+        "maftagsc_iconmimetype": {
+          "type": "string",
+          "title": "Icon MIME Type",
+          "x-ms-dataverse-attribute": "maftagsc_iconmimetype",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "maftagsc_iconmimetype",
+          "maxLength": 100
+        },
+        "maftagsc_iconsource": {
+          "type": "string",
+          "title": "Icon Source",
+          "x-ms-dataverse-attribute": "maftagsc_iconsource",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "maftagsc_iconsource",
+          "maxLength": 20
+        },
+        "maftagsc_iconwebresourcename": {
+          "type": "string",
+          "title": "Icon Web Resource Name",
+          "x-ms-dataverse-attribute": "maftagsc_iconwebresourcename",
+          "x-ms-dataverse-type": "StringType",
+          "x-ms-schema-name": "maftagsc_iconwebresourcename",
+          "maxLength": 256
         },
         "maftagsc_lastoperationsummary": {
           "type": "string",
@@ -397,7 +429,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "21142d44-d17c-f111-ab0e-000d3a34087e",
+          "x-ms-optionsetmetadataid": "54ddd7f8-577e-f111-ab0e-0022480402a6",
           "x-ms-isGlobal": false,
           "x-ms-optionsetdisplayname": "Status",
           "x-ms-optionSetType": "State"
@@ -440,7 +472,7 @@
             null,
             null
           ],
-          "x-ms-optionsetmetadataid": "2b142d44-d17c-f111-ab0e-000d3a34087e",
+          "x-ms-optionsetmetadataid": "5eddd7f8-577e-f111-ab0e-0022480402a6",
           "x-ms-isGlobal": false,
           "x-ms-optionsetdisplayname": "Status Reason",
           "x-ms-optionSetType": "Status"

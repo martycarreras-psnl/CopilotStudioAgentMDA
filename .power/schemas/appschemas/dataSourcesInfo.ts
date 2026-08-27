@@ -60,24 +60,17 @@ export const dataSourcesInfo = {
       }
     }
   },
-  "appmodulecomponents": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "appmodulecomponentid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
-  "appmodules": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "appmoduleid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
   "bots": {
     "tableId": "",
     "version": "",
     "primaryKey": "botid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "appmodulecomponents": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "appmodulecomponentid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },
@@ -88,17 +81,10 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
-  "maftagsc_sidecarconfigurations": {
+  "appmodules": {
     "tableId": "",
     "version": "",
-    "primaryKey": "maftagsc_sidecarconfigurationid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
-  "maftagsc_targetbindings": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "maftagsc_targetbindingid",
+    "primaryKey": "appmoduleid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },
@@ -106,6 +92,20 @@ export const dataSourcesInfo = {
     "tableId": "",
     "version": "",
     "primaryKey": "publisherid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "roles": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "roleid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "maftagsc_sidecarconfigurations": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "maftagsc_sidecarconfigurationid",
     "dataSourceType": "Dataverse",
     "apis": {}
   },
@@ -134,13 +134,6 @@ export const dataSourcesInfo = {
       }
     }
   },
-  "roles": {
-    "tableId": "",
-    "version": "",
-    "primaryKey": "roleid",
-    "dataSourceType": "Dataverse",
-    "apis": {}
-  },
   "solutions": {
     "tableId": "",
     "version": "",
@@ -162,10 +155,24 @@ export const dataSourcesInfo = {
     "dataSourceType": "Dataverse",
     "apis": {}
   },
+  "maftagsc_targetbindings": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "maftagsc_targetbindingid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
   "systemusers": {
     "tableId": "",
     "version": "",
     "primaryKey": "systemuserid",
+    "dataSourceType": "Dataverse",
+    "apis": {}
+  },
+  "webresourceset": {
+    "tableId": "",
+    "version": "",
+    "primaryKey": "webresourceid",
     "dataSourceType": "Dataverse",
     "apis": {}
   }

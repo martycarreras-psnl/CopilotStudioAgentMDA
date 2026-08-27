@@ -6,7 +6,7 @@ export const Entitiescomponentstate = {
   0: 'Published',
   1: 'Unpublished',
   2: 'Deleted',
-  3: 'Deleted Unpublished'
+  3: 'DeletedUnpublished'
 } as const;
 export type Entitiescomponentstate = keyof typeof Entitiescomponentstate;
 

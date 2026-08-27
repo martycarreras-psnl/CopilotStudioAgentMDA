@@ -11,8 +11,10 @@ import {
 } from "../../model-driven/webresources/maftagsc_/copilot/sidecarConfiguration";
 import {
     BootstrapSidecarConfigurationRepository,
+    DEFAULT_SIDECAR_ICON,
     DataverseSidecarConfigurationRepository,
     FallbackSidecarConfigurationRepository,
+    resolveSidecarIconWebResource,
     type SidecarConfigurationRepository
 } from "../../model-driven/webresources/maftagsc_/copilot/sidecarConfigurationRepository";
 
@@ -214,7 +216,9 @@ describe("sidecar configuration resolution", () => {
                     maftagsc_tenantid: "d92190b9-98e7-46da-8b11-580e06c7d15d",
                     maftagsc_environmentid: "f9b87f8b-0abf-e629-affb-b13195d1ed14",
                     maftagsc_agentschemaname: "cr88d_insightsandactions_AChDbK",
-                    maftagsc_agentconnectionstring: GITHUB_CONNECTION_STRING
+                    maftagsc_agentconnectionstring: GITHUB_CONNECTION_STRING,
+                    maftagsc_iconwebresourcename:
+                       "maftagsc_/sidecars/79e1c0dadb9ff111aaad0022480b10ac/icon_0123456789abcdef.png"
                 }]
             })
             .mockResolvedValueOnce({
@@ -234,11 +238,26 @@ describe("sidecar configuration resolution", () => {
             configurationId: CONFIGURATION_ID,
             paneId: paneId(CONFIGURATION_ID),
             agentSchemaName: "cr88d_insightsandactions_AChDbK",
-            agentConnectionString: GITHUB_CONNECTION_STRING
+            agentConnectionString: GITHUB_CONNECTION_STRING,
+            iconWebResource:
+               "WebResources/maftagsc_/sidecars/79e1c0dadb9ff111aaad0022480b10ac/icon_0123456789abcdef.png"
         });
         expect(candidate?.entityBindings.contact?.formIds).toEqual([FORM_ID]);
         expect(retrieveMultipleRecords.mock.calls[0]?.[1])
             .toContain("maftagsc_agentconnectionstring");
+    });
+
+    it("rejects malformed or cross-configuration icon pointers", () => {
+       expect(resolveSidecarIconWebResource(
+           "maftagsc_/sidecars/12345678123412341234123456789abc/icon_0123456789abcdef.png",
+           CONFIGURATION_ID
+       )).toBe(DEFAULT_SIDECAR_ICON);
+       expect(resolveSidecarIconWebResource(
+           "https://example.test/icon.png",
+           CONFIGURATION_ID
+       )).toBe(DEFAULT_SIDECAR_ICON);
+       expect(resolveSidecarIconWebResource(undefined, CONFIGURATION_ID))
+           .toBe(DEFAULT_SIDECAR_ICON);
     });
 
     it("matches entity names case-insensitively and forms exactly", () => {

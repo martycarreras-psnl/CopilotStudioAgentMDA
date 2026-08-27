@@ -258,6 +258,30 @@ class DataverseMetadataApi:
                 time.sleep(5)
         return None
 
+    def get_attribute(self, table: str, logical_name: str) -> dict[str, Any] | None:
+        try:
+            return self.request(
+                "GET",
+                f"EntityDefinitions(LogicalName='{table}')/"
+                f"Attributes(LogicalName='{logical_name}')?"
+                "$select=MetadataId,LogicalName,SchemaName",
+            )
+        except RuntimeError as error:
+            if "(404)" in str(error):
+                return None
+            raise
+
+    def ensure_column(self, table: str, definition: dict[str, Any]) -> None:
+        logical_name = definition["SchemaName"].lower()
+        if self.get_attribute(table, logical_name) is not None:
+            return
+        self.request(
+            "POST",
+            f"EntityDefinitions(LogicalName='{table}')/Attributes",
+            definition,
+        )
+        print(f"  Added column: {logical_name}", flush=True)
+
     def ensure_table(self, definition: dict[str, Any]) -> str:
         logical_name = definition["logical_name"]
         existing = self.get_table(logical_name)
@@ -391,6 +415,10 @@ def table_definitions(choice_ids: dict[str, str]) -> tuple[dict[str, Any], ...]:
                 string_column("maftagsc_publicclientapplicationid", "Public Client Application ID", 36, "ApplicationRequired"),
                 string_column("maftagsc_environmentid", "Environment ID", 36, "ApplicationRequired"),
                 string_column("maftagsc_bindingsolutionuniquename", "Target Binding Solution", 256, "ApplicationRequired"),
+                string_column("maftagsc_iconsource", "Icon Source", 20, "None"),
+                string_column("maftagsc_iconwebresourcename", "Icon Web Resource Name", 256, "None"),
+                string_column("maftagsc_iconcontenthash", "Icon Content Hash", 128, "None"),
+                string_column("maftagsc_iconmimetype", "Icon MIME Type", 100, "None"),
                 boolean_column("maftagsc_autoenablenewtables", "Propose New Tables", True, "ApplicationRequired"),
                 picklist_column("maftagsc_healthstate", "Health State", "ApplicationRequired", choice_ids["maftagsc_sidecarhealthstate"]),
                 datetime_column("maftagsc_lastvalidatedat", "Last Validated At", "None"),
@@ -462,6 +490,12 @@ def main() -> None:
         api.ensure_table(table)
 
     # Newly-created entity metadata can remain invisible by logical name until published.
+    api.publish()
+
+    configuration = table_definitions(choice_ids)[0]
+    for attribute in configuration["attributes"]:
+        if attribute["SchemaName"].startswith("maftagsc_icon"):
+            api.ensure_column(configuration["logical_name"], attribute)
     api.publish()
 
     # Force metadata cache refresh before dependent operations.
