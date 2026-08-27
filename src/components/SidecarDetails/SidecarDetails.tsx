@@ -140,6 +140,7 @@ export function SidecarDetails({
   onUninstall,
 }: SidecarDetailsProps) {
   const styles = useStyles();
+  const [editorOpen, setEditorOpen] = useState(false);
   const [uninstallOpen, setUninstallOpen] = useState(false);
 
   const confirmUninstall = () => {
@@ -175,7 +176,7 @@ export function SidecarDetails({
       </section>
 
       {error && <MessageBar intent="error"><MessageBarBody><MessageBarTitle>Operation failed</MessageBarTitle>{error}</MessageBarBody></MessageBar>}
-      {report && (report.active || report.hasEntries) && (
+      {report && !editorOpen && (report.active || report.hasEntries) && (
         <OperationProgress
           active={report.active}
           progress={report.progress}
@@ -238,7 +239,9 @@ export function SidecarDetails({
                 loading={editLoading}
                 busy={busy}
                 error={editError}
+                operationReport={report}
                 onOpen={onEditOpen}
+                onDialogOpenChange={setEditorOpen}
                 onSave={onUpdate}
               />
             </div>
@@ -274,7 +277,9 @@ export function SidecarDetails({
                 loading={editLoading}
                 busy={busy}
                 error={editError}
+                operationReport={report}
                 onOpen={onEditOpen}
+                onDialogOpenChange={setEditorOpen}
                 onSave={onUpdate}
               />
             </div>

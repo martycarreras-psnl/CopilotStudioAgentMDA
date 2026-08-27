@@ -250,6 +250,7 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
       configuration.healthState = 'healthy';
       configuration.lastValidatedAt = now();
       configuration.lastOperationSummary = 'Tables, forms, and icon updated in place.';
+      await new Promise((resolve) => setTimeout(resolve, 150));
       return clone(configuration);
     },
     async validate(id) {

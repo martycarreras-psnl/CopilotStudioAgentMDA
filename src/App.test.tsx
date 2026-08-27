@@ -105,6 +105,13 @@ describe('Agent Sidecar Administration', () => {
     expect((screen.getByRole('radio', { name: 'Keep the current icon' }) as HTMLInputElement).checked).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByRole('heading', { name: 'Applying your changes' })).toBeTruthy();
+    expect(screen.getByText(/safely updates and verifies the configuration/)).toBeTruthy();
+    expect(screen.getByText('Update placement')).toBeTruthy();
+    expect(screen.getByText('Publish changes')).toBeTruthy();
+    expect(screen.getByText('Verify the result')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Saving changes…' })).toBeTruthy();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect((await screen.findAllByText('Tables, forms, and icon updated in place.')).length).toBeGreaterThan(0);
     expect(screen.getByText('cr0b1_HRMgmtClassic')).toBeTruthy();

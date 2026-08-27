@@ -332,7 +332,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         solution,
         /<RootComponent type="61" schemaName="maftagsc_\/copilot\/authRedirect\.html" behavior="0" \/>/
     );
-    assert.match(solution, /<Version>1\.0\.0\.22<\/Version>/);
+    assert.match(solution, /<Version>1\.0\.0\.23<\/Version>/);
 
     const packagedRuntime = [...entries.entries()].find(([name]) =>
         name.startsWith("WebResources/maftagsc_copilotagentSidePanehtml")
@@ -373,6 +373,8 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(packagedCodeApp, /Edit sidecar settings/);
     assert.match(packagedCodeApp, /Safe in-place update/);
     assert.match(packagedCodeApp, /Enable on this table/);
+    assert.match(packagedCodeApp, /Applying your changes/);
+    assert.match(packagedCodeApp, /Verify the result/);
     assert.match(packagedCodeApp, /Available model-driven apps/);
     assert.match(packagedCodeApp, /Current configuration choices/);
     assert.match(packagedCodeApp, /List published Copilot Studio agents/);

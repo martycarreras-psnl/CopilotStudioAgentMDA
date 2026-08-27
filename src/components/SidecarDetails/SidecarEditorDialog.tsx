@@ -18,6 +18,7 @@ import {
   Tab,
   TabList,
   Text,
+  Title3,
   makeStyles,
   mergeClasses,
   tokens,
@@ -30,14 +31,17 @@ import {
   TableRegular,
 } from '@fluentui/react-icons';
 import { defaultFormId } from '@/lib/target-forms';
+import { OperationProgress } from '@/components/OperationProgress/OperationProgress';
 import { SidecarIcon } from '@/components/SidecarIcon/SidecarIcon';
 import { SidecarIconPicker } from '@/components/SidecarWizard/SidecarIconPicker';
+import type { OperationLogEntry } from '@/hooks/useOperationReport';
 import type {
   SidecarEditModel,
   SidecarIconContent,
   SidecarIconSelection,
   SidecarIconSource,
   SidecarMutableUpdate,
+  SidecarProgress,
   TargetTable,
 } from '@/types/sidecar-admin-models';
 
@@ -215,6 +219,43 @@ const useStyles = makeStyles({
     paddingTop: tokens.spacingVerticalM,
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
+  savingPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalL,
+    padding: tokens.spacingHorizontalXL,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  savingIntro: {
+    display: 'grid',
+    gridTemplateColumns: '40px minmax(0, 1fr)',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+  },
+  savingCopy: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXXS,
+  },
+  saveStages: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: tokens.spacingHorizontalS,
+    '@media (max-width: 700px)': { gridTemplateColumns: '1fr' },
+  },
+  saveStage: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalXS,
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  saveStageIcon: {
+    color: tokens.colorBrandForeground1,
+  },
 });
 
 function cloneTables(tables: TargetTable[]): TargetTable[] {
@@ -236,7 +277,14 @@ interface SidecarEditorDialogProps {
   currentIconContent?: SidecarIconContent;
   currentIconWebResourceName?: string;
   dataverseOrgUrl?: string;
+  operationReport?: {
+    progress?: SidecarProgress;
+    entries: OperationLogEntry[];
+    errorCount: number;
+    onDownload: () => void;
+  };
   onOpen: () => void;
+  onDialogOpenChange?: (open: boolean) => void;
   onSave: (update: SidecarMutableUpdate) => Promise<void>;
 }
 
@@ -252,7 +300,9 @@ export function SidecarEditorDialog({
   currentIconContent,
   currentIconWebResourceName,
   dataverseOrgUrl,
+  operationReport,
   onOpen,
+  onDialogOpenChange,
   onSave,
 }: SidecarEditorDialogProps) {
   const styles = useStyles();
@@ -335,19 +385,28 @@ export function SidecarEditorDialog({
         expectedEditVersion: model.editVersion,
       });
       setOpen(false);
+      onDialogOpenChange?.(false);
     } catch {
       // The page mutation exposes the actionable error inside this dialog.
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(_, data) => !busy && setOpen(data.open)}>
+    <Dialog
+      open={open}
+      onOpenChange={(_, data) => {
+        if (busy) return;
+        setOpen(data.open);
+        onDialogOpenChange?.(data.open);
+      }}
+    >
       <Button
         icon={<EditRegular />}
         onClick={() => {
           onOpen();
           setSection(initialSection);
           setOpen(true);
+          onDialogOpenChange?.(true);
         }}
         disabled={busy}
       >
@@ -374,7 +433,51 @@ export function SidecarEditorDialog({
                 <MessageBarBody><MessageBarTitle>Update failed</MessageBarTitle>{error}</MessageBarBody>
               </MessageBar>
             )}
-            {loading || !model ? <Spinner label="Loading current app tables and forms" /> : (
+            {busy ? (
+              <div className={styles.savingPanel} aria-label="Saving sidecar settings">
+                <div className={styles.savingIntro}>
+                  <Spinner size="medium" />
+                  <div className={styles.savingCopy}>
+                    <Title3 as="h3">Applying your changes</Title3>
+                    <Text className={styles.muted}>
+                      Keep this window open while Agent Sidecar safely updates and verifies the configuration.
+                    </Text>
+                  </div>
+                </div>
+                <OperationProgress
+                  active
+                  progress={operationReport?.progress}
+                  entries={operationReport?.entries}
+                  errorCount={operationReport?.errorCount ?? 0}
+                  downloadable={Boolean(operationReport?.entries.length)}
+                  onDownload={operationReport?.onDownload ?? (() => undefined)}
+                  activeNote="This can take a few minutes. The editor will close after the live configuration passes verification."
+                />
+                <div className={styles.saveStages} aria-label="Save workflow">
+                  <div className={styles.saveStage}>
+                    <TableRegular className={styles.saveStageIcon} />
+                    <Text weight="semibold">Update placement</Text>
+                    <Text size={200} className={styles.muted}>
+                      Apply the selected form bindings without changing the sidecar identity.
+                    </Text>
+                  </div>
+                  <div className={styles.saveStage}>
+                    <EditRegular className={styles.saveStageIcon} />
+                    <Text weight="semibold">Publish changes</Text>
+                    <Text size={200} className={styles.muted}>
+                      Publish the affected app customizations so the new placement becomes available.
+                    </Text>
+                  </div>
+                  <div className={styles.saveStage}>
+                    <CheckmarkCircleFilled className={styles.saveStageIcon} />
+                    <Text weight="semibold">Verify the result</Text>
+                    <Text size={200} className={styles.muted}>
+                      Read back the live forms and restore the last known good state if validation fails.
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            ) : loading || !model ? <Spinner label="Loading current app tables and forms" /> : (
               <div className={styles.editor}>
                 <TabList
                   className={styles.tabs}
@@ -533,7 +636,14 @@ export function SidecarEditorDialog({
             )}
           </DialogContent>
           <DialogActions className={styles.footer}>
-            <Button appearance="secondary" onClick={() => setOpen(false)} disabled={busy}>
+            <Button
+              appearance="secondary"
+              onClick={() => {
+                setOpen(false);
+                onDialogOpenChange?.(false);
+              }}
+              disabled={busy}
+            >
               Cancel
             </Button>
             <Button
@@ -548,7 +658,7 @@ export function SidecarEditorDialog({
                 || Boolean(iconError)
               }
             >
-              Save changes
+              {busy ? 'Saving changes…' : 'Save changes'}
             </Button>
           </DialogActions>
         </DialogBody>
