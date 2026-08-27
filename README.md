@@ -33,7 +33,7 @@ Everything below is done through **solution import** and the **administration ap
 ### 2. Prepare the prerequisites
 
 - A Power Platform environment with Dataverse where you are a **System Administrator**.
-- A **published Copilot Studio agent** in that environment. Note its **environment ID** and **schema name**, and copy its **Microsoft 365 Agents SDK connection string** (Copilot Studio → your agent → Channels → Web app / Agents SDK).
+- A **published Copilot Studio agent** in that environment. The administration app discovers published agents in its current environment and generates the supported standard or GitHub Copilot harness endpoint automatically.
 - A **Microsoft Entra app registration** for the side pane's browser sign-in. Follow the dedicated [Entra app registration guide (PDF)](docs/user-guides/HR-Management-App-Guide-Entra-App-Registration.pdf) ([Word](docs/user-guides/HR-Management-App-Guide-Entra-App-Registration.docx)). In short: single-tenant **SPA**, redirect URI `https://<your-org>.crm.dynamics.com/WebResources/maftagsc_/copilot/authRedirect.html`, delegated **Power Platform API** permission `CopilotStudio.Copilots.Invoke` with **admin consent**, and **no client secret**.
 
 ### 3. Import the solution
@@ -46,9 +46,11 @@ Open the **Agent Sidecar** app and run the wizard:
 
 1. **Application** — pick the model-driven app to add the sidecar to.
 2. **Tables & forms** — choose the tables; expand any table to select specific forms (the **Information** form is selected by default, others are optional).
-3. **Agent** — paste your agent's Agents SDK connection string and environment ID, then choose the Copilot Studio agent logo, upload a custom PNG/JPEG, or keep the default icon. Custom uploads should be square (128×128 or 256×256 recommended), no larger than 512×512 or 256 KB. SVG uploads are not accepted.
+3. **Agent** — select a published agent from the current environment. The administration app infers the environment ID, classifies the standard or GitHub Copilot harness, and generates and validates the Agents SDK endpoint. Then choose the Copilot Studio agent logo, upload a custom PNG/JPEG, or keep the default icon. Custom uploads should be square (128×128 or 256×256 recommended), no larger than 512×512 or 256 KB. SVG uploads are not accepted.
 4. **Identity** — enter the SPA app registration's **client ID** and **tenant ID**.
-5. **Review & Deploy** — deploy. The app adds the sidecar to the selected forms, publishes, and verifies the result. From the same app you can later disable, reconcile drift, or uninstall — each with live progress and a downloadable report.
+5. **Review & Deploy** — deploy. The app adds the sidecar to the selected forms, publishes, and verifies the result.
+
+After deployment, open **Manage sidecar → Edit tables & icon** to add or remove table/form associations or replace/reset the icon. The edit runs in place: configuration and pane IDs, app and agent connections, Entra identity, binding solution, and conversation history remain unchanged. The administration app refreshes the app's current forms, requires at least one selection, applies additions before removals, publishes and reads back the result, and rejects a save if another administrator changed the sidecar after the editor opened. You can also validate, reconcile drift, disable or enable, and uninstall from the same page, with live progress and a downloadable report.
 
 ### 5. Use it
 

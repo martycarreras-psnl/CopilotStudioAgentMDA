@@ -7,12 +7,16 @@ import {
 import type { SidecarAdministrationProvider } from '@/services/sidecar-admin-contracts';
 import type {
   DeploymentImpact,
+  PublishedAgent,
   SidecarConfiguration,
   SidecarDraft,
   SidecarProgressCallback,
   TargetModelDrivenApp,
 } from '@/types/sidecar-admin-models';
 import { isGuid, parseCopilotStudioConnectionString } from '@/utils/agent-link';
+import {
+  buildCopilotStudioConnectionString,
+} from '@/lib/copilot-studio-agent';
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -28,9 +32,50 @@ function now(): string {
   return new Date().toISOString();
 }
 
+function editVersion(configuration: SidecarConfiguration): string {
+  return JSON.stringify({
+    tables: configuration.tables
+      .flatMap((table) => table.forms.map((form) => `${table.logicalName}:${form.formId}`))
+      .sort(),
+    iconSource: configuration.iconSource,
+    iconContentHash: configuration.iconContentHash,
+  });
+}
+
 export function createMockSidecarAdministrationProvider(): SidecarAdministrationProvider {
   const configurations = clone(mockSidecarConfigurations);
   const targetApps = clone(mockTargetApps);
+  const environmentId = 'f9b87f8b-0abf-e629-affb-b13195d1ed14';
+  const publishedAgents: PublishedAgent[] = [
+    {
+      botId: '11111111-1111-4111-8111-111111111111',
+      displayName: 'Field Guide',
+      schemaName: 'contoso_FieldGuide',
+      environmentId,
+      published: true,
+      publishedOn: '2026-08-20T12:00:00Z',
+      harness: 'standard',
+      connectionString: buildCopilotStudioConnectionString(
+        environmentId,
+        'contoso_FieldGuide',
+        'standard',
+      ),
+    },
+    {
+      botId: '22222222-2222-4222-8222-222222222222',
+      displayName: 'Insights and actions',
+      schemaName: 'cr88d_insightsandactions_AChDbK',
+      environmentId,
+      published: true,
+      publishedOn: '2026-08-21T12:00:00Z',
+      harness: 'github',
+      connectionString: buildCopilotStudioConnectionString(
+        environmentId,
+        'cr88d_insightsandactions_AChDbK',
+        'github',
+      ),
+    },
+  ];
 
   return {
     async getAccessContext() {
@@ -65,6 +110,9 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
       };
       targetApps.push(manual);
       return clone(manual);
+    },
+    async listPublishedAgents() {
+      return clone(publishedAgents);
     },
     async resolveAgentLink(connectionString, environmentId) {
       return parseCopilotStudioConnectionString(connectionString, environmentId);
@@ -149,6 +197,60 @@ export function createMockSidecarAdministrationProvider(): SidecarAdministration
       };
       configurations.unshift(deployed);
       return clone(deployed);
+    },
+    async getEditModel(id) {
+      const configuration = requireConfiguration(configurations, id);
+      const target = targetApps.find((item) => item.appId === configuration.appId);
+      if (!target) throw new Error('The target Model-driven App could not be rediscovered.');
+      const selected = new Set(
+        configuration.tables.flatMap((table) =>
+          table.forms.map((form) => `${table.logicalName}:${form.formId}`),
+        ),
+      );
+      const agentIcon = publishedAgents.find(
+        (agent) => agent.schemaName === configuration.agentSchemaName,
+      )?.icon;
+      return {
+        tables: clone(target.tables.map((table) => ({
+          ...table,
+          enabled: table.forms.some((form) => selected.has(`${table.logicalName}:${form.formId}`)),
+          forms: table.forms.map((form) => ({
+            ...form,
+            enabled: selected.has(`${table.logicalName}:${form.formId}`),
+          })),
+        }))),
+        agentIcon: agentIcon ? clone(agentIcon) : undefined,
+        editVersion: editVersion(configuration),
+      };
+    },
+    async updateMutableConfiguration(id, update, onProgress) {
+      const configuration = requireConfiguration(configurations, id);
+      if (update.expectedEditVersion !== editVersion(configuration)) {
+        throw new Error('This sidecar changed after editing began. Reload it before saving.');
+      }
+      const selected = update.tables
+        .filter((table) => table.enabled)
+        .map((table) => ({
+          ...table,
+          forms: table.forms.filter((form) => form.enabled),
+          formCount: table.forms.filter((form) => form.enabled).length,
+        }))
+        .filter((table) => table.forms.length > 0);
+      if (!selected.length) throw new Error('Select at least one form.');
+      onProgress?.({ phase: 'forms', current: 1, total: 1, label: 'Updating table and form bindings' });
+      configuration.tables = clone(selected);
+      if (update.icon) {
+        configuration.iconSource = update.icon.source;
+        configuration.iconContentHash = update.icon.content?.contentHash;
+        configuration.iconMimeType = update.icon.content?.mimeType;
+        configuration.iconWebResourceName = update.icon.source === 'default'
+          ? undefined
+          : `mock/${update.icon.content?.contentHash ?? 'icon'}`;
+      }
+      configuration.healthState = 'healthy';
+      configuration.lastValidatedAt = now();
+      configuration.lastOperationSummary = 'Tables, forms, and icon updated in place.';
+      return clone(configuration);
     },
     async validate(id) {
       const configuration = requireConfiguration(configurations, id);

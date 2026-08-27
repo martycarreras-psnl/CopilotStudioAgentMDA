@@ -297,7 +297,7 @@ test("core solution packages persistent conversation metadata and runtime", asyn
     assert.match(customizations, /maftagsc_iconmimetype/);
     assert.doesNotMatch(
         customizations,
-        /<AppVersion>2026-08-26T23:29:00Z<\/AppVersion>/
+        /<AppVersion>2026-08-27T01:32:00Z<\/AppVersion>/
     );
     assert.match(
         customizations,
@@ -354,6 +354,10 @@ test("core solution packages persistent conversation metadata and runtime", asyn
         .join("\n");
     assert.match(packagedCodeApp, /maftagsc_iconwebresourcename/);
     assert.match(packagedCodeApp, /Copilot Studio agent logo/);
+    assert.match(packagedCodeApp, /Edit tables & icon/);
+    assert.match(packagedCodeApp, /List published Copilot Studio agents/);
+    assert.match(packagedCodeApp, /This sidecar changed after editing began/);
+    assert.match(packagedCodeApp, /__sidecar_edit_lock__/);
 
     const codeAppPackageUris = [
         ...customizations.matchAll(/<CodeAppPackageUri>([^<]+)<\/CodeAppPackageUri>/g)

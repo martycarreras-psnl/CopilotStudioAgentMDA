@@ -3,7 +3,7 @@ import { SidecarWizard } from '@/components/SidecarWizard/SidecarWizard';
 import {
   useDeploySidecar,
   useDeploymentPreview,
-  useResolveAgentLink,
+  usePublishedAgents,
   useResolveManualTargetApp,
   useTargetApps,
 } from '@/hooks/useSidecarAdministration';
@@ -11,22 +11,23 @@ import {
 export function CreateSidecarPage() {
   const navigate = useNavigate();
   const targetApps = useTargetApps();
+  const publishedAgents = usePublishedAgents();
   const resolveManual = useResolveManualTargetApp();
-  const resolveAgent = useResolveAgentLink();
   const preview = useDeploymentPreview();
   const deploy = useDeploySidecar();
-  const error = [targetApps.error, resolveManual.error, resolveAgent.error, preview.error, deploy.error]
+  const error = [targetApps.error, publishedAgents.error, resolveManual.error, preview.error, deploy.error]
     .find((item): item is Error => item instanceof Error);
 
   return (
     <SidecarWizard
       apps={targetApps.data}
       appsLoading={targetApps.isLoading}
-      busy={resolveManual.isPending || resolveAgent.isPending || preview.isPending || deploy.isPending}
+      agents={publishedAgents.data}
+      agentsLoading={publishedAgents.isLoading}
+      busy={resolveManual.isPending || preview.isPending || deploy.isPending}
       error={error?.message}
       onCancel={() => navigate('/')}
       onResolveManualApp={(appId) => resolveManual.mutateAsync(appId)}
-      onResolveAgent={(connectionString, environmentId) => resolveAgent.mutateAsync({ connectionString, environmentId })}
       onPreview={(draft) => preview.mutateAsync(draft)}
       onDeploy={async (draft, onProgress) => {
         const configuration = await deploy.mutateAsync({ draft, onProgress });

@@ -15,9 +15,13 @@ export function createSidecarAdministrationProvider(): SidecarAdministrationProv
     getConfiguration: (id) => provider.then((value) => value.getConfiguration(id)),
     discoverTargetApps: () => provider.then((value) => value.discoverTargetApps()),
     resolveManualTargetApp: (appId) => provider.then((value) => value.resolveManualTargetApp(appId)),
+    listPublishedAgents: () => provider.then((value) => value.listPublishedAgents()),
     resolveAgentLink: (connectionString, environmentId) => provider.then((value) => value.resolveAgentLink(connectionString, environmentId)),
     previewDeployment: (draft) => provider.then((value) => value.previewDeployment(draft)),
     deploy: (draft, onProgress) => provider.then((value) => value.deploy(draft, onProgress)),
+    getEditModel: (id) => provider.then((value) => value.getEditModel(id)),
+    updateMutableConfiguration: (id, update, onProgress) =>
+      provider.then((value) => value.updateMutableConfiguration(id, update, onProgress)),
     validate: (id) => provider.then((value) => value.validate(id)),
     reconcile: (id, onProgress) => provider.then((value) => value.reconcile(id, onProgress)),
     setEnabled: (id, enabled, onProgress) => provider.then((value) => value.setEnabled(id, enabled, onProgress)),

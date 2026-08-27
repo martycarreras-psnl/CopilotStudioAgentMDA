@@ -36,14 +36,11 @@ describe('Agent Sidecar Administration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    fireEvent.change(screen.getByRole('textbox', { name: /Microsoft 365 Agents SDK connection string/ }), {
-      target: { value: 'https://1234567890.environment.api.powerplatform.com/copilotstudio/dataverse-backed/authenticated/bots/contoso_FieldGuide/conversations?api-version=2022-03-01-preview' },
-    });
-    fireEvent.change(screen.getByRole('textbox', { name: /Environment ID/ }), {
-      target: { value: 'f9b87f8b-0abf-e629-affb-b13195d1ed14' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Resolve agent' }));
-    expect((await screen.findAllByText('Field Guide')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('combobox', { name: /Published Copilot Studio agent/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /Field Guide/ }));
+    expect((await screen.findAllByText(/Field Guide/)).length).toBeGreaterThan(0);
+    expect(screen.getByText(/standard harness/)).toBeTruthy();
+    expect(screen.getByText('Sidecar icon')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     fireEvent.change(screen.getByRole('textbox', { name: /Tenant ID/ }), { target: { value: 'not-a-guid' } });
@@ -76,5 +73,20 @@ describe('Agent Sidecar Administration', () => {
     const enable = await screen.findByRole('button', { name: 'Enable' });
     fireEvent.click(enable);
     expect(await screen.findByRole('button', { name: 'Disable' })).toBeTruthy();
+  });
+
+  it('edits tables and icon in place while preserving immutable identity', async () => {
+    render(<App />, { initialRoute: '/sidecars/sidecar-hr-management' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit tables & icon' }));
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByText(/app, agent connection, pane identity, Entra identity/)).toBeTruthy();
+    expect((await screen.findByRole('radio', { name: 'Keep the current icon' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText(/\d+ forms? selected/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByText('Tables, forms, and icon updated in place.')).toBeTruthy();
+    expect(screen.getByText('cr0b1_HRMgmtClassic')).toBeTruthy();
   });
 });

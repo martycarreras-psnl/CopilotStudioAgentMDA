@@ -1,6 +1,7 @@
 import { getContext } from '@microsoft/power-apps/app';
 import { AppmodulesService } from '@/generated/services/AppmodulesService';
 import { BotsService } from '@/generated/services/BotsService';
+import type { Bots } from '@/generated/models/BotsModel';
 import { Maftagsc_sidecarconfigurationsService as Configurations } from '@/generated/services/Maftagsc_sidecarconfigurationsService';
 import { Maftagsc_targetbindingsService as Bindings } from '@/generated/services/Maftagsc_targetbindingsService';
 import { PublishersService } from '@/generated/services/PublishersService';
@@ -18,7 +19,7 @@ import {
   publishTables,
   publishWebResources,
 } from '@/services/dataverse-custom-api';
-import type { SidecarConfiguration, SidecarDraft, SidecarHealthCheck, SidecarHealthState, SidecarLifecycleState, SidecarProgressCallback, TargetModelDrivenApp, TargetTable } from '@/types/sidecar-admin-models';
+import type { PublishedAgent, SidecarConfiguration, SidecarDraft, SidecarEditModel, SidecarHealthCheck, SidecarHealthState, SidecarLifecycleState, SidecarMutableUpdate, SidecarProgressCallback, TargetModelDrivenApp, TargetTable } from '@/types/sidecar-admin-models';
 import { parseCopilotStudioConnectionString } from '@/utils/agent-link';
 import { discoverAppForms, type DiscoveredForm } from '@/services/model-driven-app-discovery';
 import { isInformationFormName } from '@/lib/target-forms';
@@ -32,12 +33,19 @@ import {
   deleteSidecarIconWebResource,
   listSidecarIconWebResources,
 } from '@/services/sidecar-icon-web-resource';
+import {
+  buildCopilotStudioConnectionString,
+  inferCopilotStudioApiSuffix,
+  inferCopilotStudioHarness,
+} from '@/lib/copilot-studio-agent';
 
 const ADMIN_ROLE_TEMPLATE = '627090ff-40a3-4053-8790-584edc5be201';
 const SIDECAR_PUBLISHER = 'agentsidecar';
 const LIBRARY = 'maftagsc_/copilot/agentSidePane.js';
 const HANDLER = 'AgentSidecar.initializeGuide';
 const ICON_OWNER_ROOT = 'maftagsc_/sidecars/';
+const EDIT_LOCK_FORM_ID = 'ffffffff-ffff-4fff-bfff-ffffffffffff';
+const EDIT_LOCK_TABLE = '__sidecar_edit_lock__';
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Result<T> = { data?: T; error?: unknown };
 type Form = DiscoveredForm;
@@ -70,11 +78,52 @@ function guid(value: string | undefined, label: string): string {
 function odataString(value: string): string {
   return value.trim().replace(/'/g, "''");
 }
+function cloudHostname(dataverseOrgUrl?: string): string {
+  if (dataverseOrgUrl) {
+    try {
+      return new URL(dataverseOrgUrl).hostname;
+    } catch {
+      throw new Error('The current Dataverse organization URL is invalid.');
+    }
+  }
+  return window.location.hostname;
+}
 function isOwnedIconName(value: string | undefined, configurationId: string): value is string {
   if (!value) return false;
   const key = guid(configurationId, 'Configuration ID').replace(/-/g, '');
   return value.startsWith(`${ICON_OWNER_ROOT}${key}/`)
     && /^icon_[0-9a-f]{16}\.(?:png|jpg)$/i.test(value.slice(`${ICON_OWNER_ROOT}${key}/`.length));
+}
+async function mapPublishedAgent(
+  record: Bots,
+  environmentId: string,
+  apiSuffix: string,
+): Promise<PublishedAgent> {
+  const harness = inferCopilotStudioHarness(record.template);
+  let icon;
+  if (record.iconbase64) {
+    try {
+      icon = await inspectSidecarIconBase64(record.iconbase64);
+    } catch {
+      icon = undefined;
+    }
+  }
+  return {
+    botId: guid(record.botid, 'Copilot Studio agent ID'),
+    displayName: record.name?.trim() || record.schemaname,
+    schemaName: record.schemaname,
+    environmentId,
+    published: true,
+    publishedOn: record.publishedon as string,
+    harness,
+    connectionString: buildCopilotStudioConnectionString(
+      environmentId,
+      record.schemaname,
+      harness,
+      apiSuffix,
+    ),
+    icon,
+  };
 }
 const HEALTH = {
   none: option(HealthOptions, 'NotValidated'), healthy: option(HealthOptions, 'Healthy'),
@@ -207,7 +256,142 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
   const appForms = new Map<string, Map<string, Form[]>>();
   const appTableDisplayNames = new Map<string, Map<string, string>>();
   async function bindingsFor(id?: string): Promise<Maftagsc_targetbindings[]> {
-    return data(await Bindings.getAll({ filter: id ? `_maftagsc_sidecarconfiguration_value eq ${guid(id, 'Configuration ID')}` : undefined, top: 5000 }), 'List target bindings');
+    const configurationFilter = id
+      ? `_maftagsc_sidecarconfiguration_value eq ${guid(id, 'Configuration ID')} and `
+      : '';
+    return data(await Bindings.getAll({
+      filter: `${configurationFilter}maftagsc_formid ne '${EDIT_LOCK_FORM_ID}'`,
+      top: 5000,
+    }), 'List target bindings');
+  }
+  async function acquireEditLock(configurationId: string): Promise<string> {
+    const existing = data(await Bindings.getAll({
+      select: ['maftagsc_targetbindingid', 'createdon'],
+      filter: `_maftagsc_sidecarconfiguration_value eq ${configurationId} and maftagsc_formid eq '${EDIT_LOCK_FORM_ID}'`,
+      top: 1,
+    }), 'Check sidecar edit lease')[0];
+    if (existing) {
+      const createdAt = existing.createdon ? Date.parse(existing.createdon) : Number.NaN;
+      if (Number.isFinite(createdAt) && Date.now() - createdAt > 2 * 60 * 60 * 1000) {
+        await Bindings.delete(existing.maftagsc_targetbindingid);
+      } else {
+        throw new Error('Another administrator is updating this sidecar. Try again after that update finishes.');
+      }
+    }
+    try {
+      const lease = data(await Bindings.create({
+        maftagsc_name: 'Sidecar edit lease',
+        maftagsc_tablelogicalname: EDIT_LOCK_TABLE,
+        maftagsc_tabledisplayname: 'Sidecar edit lease',
+        maftagsc_formid: EDIT_LOCK_FORM_ID,
+        maftagsc_formname: 'Sidecar edit lease',
+        maftagsc_enabled: false,
+        maftagsc_handleruniqueid: crypto.randomUUID(),
+        maftagsc_originalformfingerprint: 'lease',
+        maftagsc_lastappliedfingerprint: 'lease',
+        maftagsc_validationstate: VALIDATION.none,
+        'maftagsc_sidecarconfiguration@odata.bind': `/maftagsc_sidecarconfigurations(${configurationId})`,
+        statecode: 0,
+        statuscode: 1,
+      }), 'Acquire sidecar edit lease');
+      return lease.maftagsc_targetbindingid;
+    } catch (error) {
+      throw new Error(
+        /duplicate|key|already exists/i.test(message(error))
+          ? 'Another administrator is updating this sidecar. Try again after that update finishes.'
+          : `The sidecar edit lease could not be acquired: ${message(error)}`,
+      );
+    }
+  }
+  async function mutableEditVersion(
+    record: Maftagsc_sidecarconfigurations,
+    bindings: Maftagsc_targetbindings[],
+  ): Promise<string> {
+    return hash(JSON.stringify({
+      lifecycleState: lifecycle(record),
+      bindings: bindings.map((binding) => ({
+        id: binding.maftagsc_targetbindingid,
+        table: binding.maftagsc_tablelogicalname,
+        form: binding.maftagsc_formid.toLowerCase(),
+        enabled: binding.maftagsc_enabled,
+      })).sort((left, right) => left.id.localeCompare(right.id)),
+      icon: {
+        source: record.maftagsc_iconsource || 'default',
+        name: record.maftagsc_iconwebresourcename || '',
+        hash: record.maftagsc_iconcontenthash || '',
+        mime: record.maftagsc_iconmimetype || '',
+      },
+    }));
+  }
+  async function editModel(id: string): Promise<SidecarEditModel> {
+    const configurationId = guid(id, 'Configuration ID');
+    const [recordResult, currentBindings] = await Promise.all([
+      Configurations.get(configurationId),
+      bindingsFor(configurationId),
+    ]);
+    const record = data(recordResult, 'Read sidecar configuration');
+    const app = await targetApp(record.maftagsc_appid);
+    const selected = new Set(
+      currentBindings
+        .filter((binding) => record.statecode === 1 || binding.maftagsc_enabled)
+        .map((binding) => `${binding.maftagsc_tablelogicalname}:${binding.maftagsc_formid.toLowerCase()}`),
+    );
+    const agents = data(await BotsService.getAll({
+      select: ['botid', 'name', 'schemaname', 'publishedon', 'iconbase64', 'template'],
+      filter: `schemaname eq '${odataString(record.maftagsc_agentschemaname)}' and statecode eq 0 and componentstate eq 0 and publishedon ne null`,
+      top: 1,
+    }), 'Read configured Copilot Studio agent');
+    let agentIcon;
+    if (agents[0]?.iconbase64) {
+      try {
+        agentIcon = await inspectSidecarIconBase64(agents[0].iconbase64);
+      } catch {
+        agentIcon = undefined;
+      }
+    }
+    const tables = app.tables.map((table) => ({
+      ...table,
+      enabled: table.forms.some((form) => selected.has(`${table.logicalName}:${form.formId.toLowerCase()}`)),
+      forms: table.forms.map((form) => ({
+        ...form,
+        available: true,
+        enabled: selected.has(`${table.logicalName}:${form.formId.toLowerCase()}`),
+      })),
+    }));
+    const tablesByName = new Map(tables.map((table) => [table.logicalName, table]));
+    for (const binding of currentBindings.filter((item) =>
+      selected.has(`${item.maftagsc_tablelogicalname}:${item.maftagsc_formid.toLowerCase()}`),
+    )) {
+      const key = `${binding.maftagsc_tablelogicalname}:${binding.maftagsc_formid.toLowerCase()}`;
+      if (app.tables.some((table) =>
+        table.forms.some((form) => `${table.logicalName}:${form.formId.toLowerCase()}` === key),
+      )) continue;
+      let table = tablesByName.get(binding.maftagsc_tablelogicalname);
+      if (!table) {
+        table = {
+          logicalName: binding.maftagsc_tablelogicalname,
+          displayName: binding.maftagsc_tabledisplayname,
+          enabled: true,
+          formCount: 0,
+          forms: [],
+        };
+        tables.push(table);
+        tablesByName.set(table.logicalName, table);
+      }
+      table.enabled = true;
+      table.formCount += 1;
+      table.forms.push({
+        formId: binding.maftagsc_formid,
+        name: binding.maftagsc_formname ?? binding.maftagsc_formid,
+        enabled: true,
+        available: false,
+      });
+    }
+    return {
+      tables,
+      agentIcon,
+      editVersion: await mutableEditVersion(record, currentBindings),
+    };
   }
   async function formsFor(appIdUnique: string): Promise<Map<string, Form[]>> {
     const normalizedId = guid(appIdUnique, 'App metadata ID');
@@ -265,7 +449,7 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     return created.solutionid;
   }
   async function provisionIcon(
-    draft: SidecarDraft,
+    draft: Pick<SidecarDraft, 'name' | 'bindingSolutionUniqueName' | 'icon'>,
     configurationId: string,
     onProgress?: SidecarProgressCallback,
   ): Promise<string | undefined> {
@@ -455,6 +639,22 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
       return Promise.all(apps.map((app) => targetApp(app.appmoduleid)));
     },
     resolveManualTargetApp: (appId) => targetApp(guid(appId, 'Model-driven App ID')),
+    async listPublishedAgents() {
+      const context = await getContext();
+      const environmentId = guid(context.app.environmentId, 'Current environment ID');
+      const apiSuffix = inferCopilotStudioApiSuffix(
+        cloudHostname(context.app.dataverseOrgUrl),
+      );
+      const records = data(await BotsService.getAll({
+        select: ['botid', 'name', 'schemaname', 'publishedon', 'iconbase64', 'template'],
+        filter: 'statecode eq 0 and componentstate eq 0 and publishedon ne null',
+        orderBy: ['name asc', 'schemaname asc'],
+        top: 5000,
+      }), 'List published Copilot Studio agents');
+      return Promise.all(records.map((record) =>
+        mapPublishedAgent(record, environmentId, apiSuffix),
+      ));
+    },
     async resolveAgentLink(connectionString, environmentId) {
       const parsed = parseCopilotStudioConnectionString(connectionString, environmentId); const context = await getContext();
       if (context.app.environmentId.toLowerCase() !== parsed.environmentId.toLowerCase()) throw new Error('The Copilot Studio agent must belong to the Code App environment.');
@@ -492,6 +692,29 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
     },
     async deploy(draft: SidecarDraft, onProgress?: SidecarProgressCallback) {
       assertSidecarActionsAvailable();
+      const context = await getContext();
+      const currentEnvironmentId = guid(context.app.environmentId, 'Current environment ID');
+      const selectedAgent = data(await BotsService.get(guid(draft.agent.botId, 'Copilot Studio agent ID'), {
+        select: ['botid', 'name', 'schemaname', 'publishedon', 'iconbase64', 'template', 'statecode', 'componentstate'],
+      }), 'Revalidate selected Copilot Studio agent');
+      if (
+        selectedAgent.statecode !== 0
+        || selectedAgent.componentstate !== 0
+        || !selectedAgent.publishedon
+      ) {
+        throw new Error('The selected Copilot Studio agent is no longer active and published.');
+      }
+      const refreshedAgent = await mapPublishedAgent(
+        selectedAgent,
+        currentEnvironmentId,
+        inferCopilotStudioApiSuffix(cloudHostname(context.app.dataverseOrgUrl)),
+      );
+      if (
+        refreshedAgent.schemaName !== draft.agent.schemaName
+        || refreshedAgent.connectionString !== draft.agentConnectionString
+      ) {
+        throw new Error('The selected Copilot Studio agent changed after discovery. Select it again before deploying.');
+      }
       const appId = guid(draft.targetApp.appId, 'Model-driven App ID');
       const tenantId = guid(draft.tenantId, 'Tenant ID');
       const clientId = guid(draft.publicClientApplicationId, 'Public-client Application ID');
@@ -627,6 +850,332 @@ export function createRealSidecarAdministrationProvider(): SidecarAdministration
         await SolutionsService.delete(bindingSolutionId).catch(() => undefined);
         throw new Error(`Deployment failed and rollback was attempted: ${message(error)}`);
       }
+    },
+    getEditModel: editModel,
+    async updateMutableConfiguration(
+      id: string,
+      update: SidecarMutableUpdate,
+      onProgress?: SidecarProgressCallback,
+    ) {
+      assertSidecarActionsAvailable();
+      const unexpected = Object.keys(update).filter(
+        (key) => !['tables', 'icon', 'expectedEditVersion'].includes(key),
+      );
+      if (unexpected.length) {
+        throw new Error(`Unsupported sidecar update field: ${unexpected[0]}.`);
+      }
+      const configurationId = guid(id, 'Configuration ID');
+      const [recordResult, currentBindings, allBindings] = await Promise.all([
+        Configurations.get(configurationId),
+        bindingsFor(configurationId),
+        bindingsFor(),
+      ]);
+      const record = data(recordResult, 'Read sidecar configuration');
+      if (await mutableEditVersion(record, currentBindings) !== update.expectedEditVersion) {
+        throw new Error('This sidecar changed after editing began. Reload it before saving.');
+      }
+      const app = await targetApp(record.maftagsc_appid);
+      const availableForms = new Map<string, { table: TargetTable; form: TargetTable['forms'][number] }>();
+      for (const table of app.tables) {
+        for (const form of table.forms) {
+          availableForms.set(`${table.logicalName}:${form.formId.toLowerCase()}`, { table, form });
+        }
+      }
+      const desiredForms = new Map<string, { table: TargetTable; form: TargetTable['forms'][number] }>();
+      for (const table of update.tables.filter((item) => item.enabled)) {
+        for (const form of table.forms.filter((item) => item.enabled)) {
+          const key = `${table.logicalName}:${guid(form.formId, 'Form ID')}`;
+          const available = availableForms.get(key);
+          if (!available) {
+            throw new Error(`${table.displayName} — ${form.name} is no longer an active form in the target app.`);
+          }
+          desiredForms.set(key, available);
+        }
+      }
+      if (!desiredForms.size) throw new Error('Select at least one form.');
+      const currentByKey = new Map(currentBindings.map((binding) => [
+        `${binding.maftagsc_tablelogicalname}:${guid(binding.maftagsc_formid, 'Form ID')}`,
+        binding,
+      ]));
+      const additions = [...desiredForms].filter(([key]) => !currentByKey.has(key));
+      const removals = [...currentByKey].filter(([key]) => !desiredForms.has(key));
+      const configurationEnabled = record.statecode === 0;
+      const activeConfigurationIds = new Set(
+        data(await Configurations.getAll({
+          select: ['maftagsc_sidecarconfigurationid'],
+          filter: 'statecode eq 0',
+          top: 5000,
+        }), 'List enabled sidecar configurations')
+          .map((configuration) => configuration.maftagsc_sidecarconfigurationid.toLowerCase()),
+      );
+      const changedForms = new Map<string, {
+        undo: 'add' | 'remove';
+        handlerId: string;
+        table: string;
+      }>();
+      const addedBindingIds: string[] = [];
+      const disabledBindings: Array<{ binding: Maftagsc_targetbindings; enabled: boolean }> = [];
+      const tablesToPublish = new Set<string>();
+      const oldIcon = {
+        source: record.maftagsc_iconsource || 'default',
+        name: record.maftagsc_iconwebresourcename,
+        hash: record.maftagsc_iconcontenthash,
+        mime: record.maftagsc_iconmimetype,
+      };
+      let newIconName: string | undefined;
+      let iconChanged = false;
+      let editLockId: string | undefined;
+      try {
+        editLockId = await acquireEditLock(configurationId);
+        const [lockedRecord, lockedBindings] = await Promise.all([
+          Configurations.get(configurationId),
+          bindingsFor(configurationId),
+        ]);
+        if (
+          await mutableEditVersion(
+            data(lockedRecord, 'Recheck sidecar configuration'),
+            lockedBindings,
+          ) !== update.expectedEditVersion
+        ) {
+          throw new Error('This sidecar changed after editing began. Reload it before saving.');
+        }
+        if (update.icon) {
+          if (update.icon.source === 'default') {
+            data(await Configurations.update(configurationId, {
+              maftagsc_iconsource: 'default',
+              maftagsc_iconwebresourcename: '',
+              maftagsc_iconcontenthash: '',
+              maftagsc_iconmimetype: '',
+            }), 'Use default sidecar icon');
+            iconChanged = oldIcon.source !== 'default' || Boolean(oldIcon.name);
+          } else {
+            if (!update.icon.content) throw new Error('The selected sidecar icon is unavailable.');
+            if (update.icon.content.contentHash === oldIcon.hash && oldIcon.name) {
+              data(await Configurations.update(configurationId, {
+                maftagsc_iconsource: update.icon.source,
+              }), 'Update sidecar icon source');
+              newIconName = oldIcon.name;
+              iconChanged = oldIcon.source !== update.icon.source;
+            } else {
+              await provisionIcon({
+                name: record.maftagsc_name,
+                bindingSolutionUniqueName: record.maftagsc_bindingsolutionuniquename,
+                icon: update.icon,
+              }, configurationId, onProgress);
+              newIconName = sidecarIconWebResourceName(configurationId, update.icon.content);
+              iconChanged = true;
+            }
+          }
+        }
+
+        let processed = 0;
+        const total = additions.length + removals.length;
+        for (const [, desired] of additions) {
+          onProgress?.({
+            phase: 'forms',
+            current: processed,
+            total,
+            label: `Adding ${desired.table.displayName} — ${desired.form.name}`,
+          });
+          const formId = guid(desired.form.formId, 'Form ID');
+          const liveForm = data(await SystemformsService.get(formId, {
+            select: ['formid', 'formxml', 'objecttypecode'],
+          }), 'Read added target form');
+          const handlerId = crypto.randomUUID();
+          const mutation = configurationEnabled
+            ? addHandler(liveForm.formxml, handlerId)
+            : { value: liveForm.formxml, handlerId, added: false };
+          if (mutation.value !== liveForm.formxml) {
+            data(await SystemformsService.update(formId, { formxml: mutation.value }), 'Add sidecar to target form');
+            changedForms.set(formId, {
+              undo: 'remove',
+              handlerId: mutation.handlerId,
+              table: desired.table.logicalName,
+            });
+            tablesToPublish.add(desired.table.logicalName);
+          }
+          await addSolutionComponent(record.maftagsc_bindingsolutionuniquename, formId, 60);
+          const binding = data(await Bindings.create({
+            maftagsc_name: `${desired.table.displayName} - ${desired.form.name}`,
+            maftagsc_tablelogicalname: desired.table.logicalName,
+            maftagsc_tabledisplayname: desired.table.displayName,
+            maftagsc_formid: formId,
+            maftagsc_formname: desired.form.name,
+            maftagsc_enabled: configurationEnabled,
+            maftagsc_handleruniqueid: mutation.handlerId,
+            maftagsc_originalformfingerprint: await hash(liveForm.formxml),
+            maftagsc_lastappliedfingerprint: await hash(mutation.value),
+            maftagsc_validationstate: configurationEnabled ? VALIDATION.pass : VALIDATION.none,
+            'maftagsc_sidecarconfiguration@odata.bind': `/maftagsc_sidecarconfigurations(${configurationId})`,
+            statecode: 0,
+            statuscode: 1,
+          }), 'Create target binding');
+          addedBindingIds.push(binding.maftagsc_targetbindingid);
+          processed += 1;
+          onProgress?.({ phase: 'forms', current: processed, total, label: `Added ${desired.table.displayName} — ${desired.form.name}` });
+        }
+
+        for (const [, binding] of removals) {
+          onProgress?.({
+            phase: 'forms',
+            current: processed,
+            total,
+            label: `Removing ${binding.maftagsc_tabledisplayname} — ${binding.maftagsc_formname ?? binding.maftagsc_formid}`,
+          });
+          disabledBindings.push({ binding, enabled: binding.maftagsc_enabled });
+          data(await Bindings.update(binding.maftagsc_targetbindingid, {
+            maftagsc_enabled: false,
+            maftagsc_validationstate: VALIDATION.none,
+          }), 'Disable removed target binding');
+          if (
+            configurationEnabled
+            && !hasOtherEnabledFormOwner(
+              allBindings,
+              activeConfigurationIds,
+              binding.maftagsc_formid,
+              configurationId,
+            )
+          ) {
+            const formId = guid(binding.maftagsc_formid, 'Form ID');
+            try {
+              const liveForm = data(await SystemformsService.get(formId, {
+                select: ['formid', 'formxml', 'objecttypecode'],
+              }), 'Read removed target form');
+              const next = removeHandler(liveForm.formxml, binding.maftagsc_handleruniqueid);
+              if (next !== liveForm.formxml) {
+                data(await SystemformsService.update(formId, { formxml: next }), 'Remove sidecar from target form');
+                changedForms.set(formId, {
+                  undo: 'add',
+                  handlerId: binding.maftagsc_handleruniqueid,
+                  table: binding.maftagsc_tablelogicalname,
+                });
+                tablesToPublish.add(binding.maftagsc_tablelogicalname);
+              }
+            } catch (error) {
+              if (!/not found|does not exist|404/i.test(message(error))) throw error;
+            }
+          }
+          processed += 1;
+          onProgress?.({ phase: 'forms', current: processed, total, label: `Removed ${binding.maftagsc_tabledisplayname} — ${binding.maftagsc_formname ?? binding.maftagsc_formid}` });
+        }
+
+        if (tablesToPublish.size) {
+          onProgress?.({ phase: 'publish', current: processed, total, label: 'Publishing form changes' });
+          await publishTables([...tablesToPublish]);
+        }
+        const bindingsToRefresh = (await bindingsFor(configurationId)).filter((binding) =>
+          binding.maftagsc_enabled
+          && tablesToPublish.has(binding.maftagsc_tablelogicalname)
+          && desiredForms.has(
+            `${binding.maftagsc_tablelogicalname}:${binding.maftagsc_formid.toLowerCase()}`,
+          ),
+        );
+        for (const binding of bindingsToRefresh) {
+          const liveForm = data(await SystemformsService.get(binding.maftagsc_formid, {
+            select: ['formxml'],
+          }), 'Verify updated target form');
+          data(await Bindings.update(binding.maftagsc_targetbindingid, {
+            maftagsc_lastappliedfingerprint: await hash(liveForm.formxml),
+          }), 'Save updated target binding fingerprint');
+        }
+        data(await Configurations.update(configurationId, {
+          maftagsc_healthstate: configurationEnabled ? HEALTH.healthy : HEALTH.none,
+          maftagsc_lastvalidatedat: new Date().toISOString(),
+          maftagsc_lastoperationsummary: 'Tables, forms, and icon updated in place.',
+          statuscode: configurationEnabled ? STATUS.deployed : STATUS.disabled,
+        }), 'Complete sidecar update');
+      } catch (error) {
+        let rollbackFailed = false;
+        for (const [formId, snapshot] of changedForms) {
+          try {
+            const live = data(await SystemformsService.get(formId, { select: ['formxml'] }), 'Read form for update rollback');
+            const restored = snapshot.undo === 'remove'
+              ? removeHandler(live.formxml, snapshot.handlerId)
+              : addHandler(live.formxml, snapshot.handlerId).value;
+            if (restored !== live.formxml) {
+              data(await SystemformsService.update(formId, { formxml: restored }), 'Restore form after failed update');
+            }
+            tablesToPublish.add(snapshot.table);
+          } catch {
+            rollbackFailed = true;
+          }
+        }
+        await Promise.all(addedBindingIds.map((bindingId) =>
+          Bindings.delete(bindingId).catch(() => { rollbackFailed = true; }),
+        ));
+        for (const { binding, enabled } of disabledBindings) {
+          await Bindings.update(binding.maftagsc_targetbindingid, {
+            maftagsc_enabled: enabled,
+            maftagsc_validationstate: binding.maftagsc_validationstate,
+          }).catch(() => { rollbackFailed = true; });
+        }
+        if (update.icon) {
+          await Configurations.update(configurationId, {
+            maftagsc_iconsource: oldIcon.source,
+            maftagsc_iconwebresourcename: oldIcon.name ?? '',
+            maftagsc_iconcontenthash: oldIcon.hash ?? '',
+            maftagsc_iconmimetype: oldIcon.mime ?? '',
+          }).catch(() => { rollbackFailed = true; });
+          if (newIconName && newIconName !== oldIcon.name) {
+            await deleteOwnedIconName(newIconName, configurationId)
+              .catch(() => { rollbackFailed = true; });
+          }
+        }
+        if (tablesToPublish.size) {
+          await publishTables([...tablesToPublish]).catch(() => { rollbackFailed = true; });
+        }
+        let lockCleanupFailed = false;
+        if (editLockId) {
+          await Bindings.delete(editLockId).catch(() => { lockCleanupFailed = true; });
+          editLockId = undefined;
+        }
+        if (rollbackFailed) {
+          await Configurations.update(configurationId, {
+            statecode: 1,
+            statuscode: STATUS.disabled,
+            maftagsc_healthstate: HEALTH.critical,
+            maftagsc_lastoperationsummary: `Update failed and rollback is incomplete: ${message(error)}`,
+          }).catch(() => undefined);
+          throw new Error(`Sidecar update failed and rollback is incomplete. The sidecar was disabled: ${message(error)}`);
+        }
+        if (lockCleanupFailed) {
+          throw new Error(`Sidecar update failed and was rolled back, but its edit lease needs cleanup: ${message(error)}`);
+        }
+        throw new Error(`Sidecar update failed and was rolled back: ${message(error)}`);
+      }
+
+      let cleanupWarning: string | undefined;
+      if (editLockId) {
+        try {
+          await Bindings.delete(editLockId);
+          editLockId = undefined;
+        } catch (error) {
+          cleanupWarning = `The update succeeded, but its edit lease needs cleanup: ${message(error)}`;
+        }
+      }
+      for (const { binding } of disabledBindings) {
+        try {
+          await Bindings.delete(binding.maftagsc_targetbindingid);
+        } catch (error) {
+          cleanupWarning = `The update succeeded, but an obsolete binding needs cleanup: ${message(error)}`;
+        }
+      }
+      if (iconChanged && oldIcon.name && oldIcon.name !== newIconName) {
+        try {
+          await deleteOwnedIconName(oldIcon.name, configurationId);
+        } catch (error) {
+          cleanupWarning = `The update succeeded, but the previous icon needs cleanup: ${message(error)}`;
+        }
+      }
+      if (cleanupWarning) {
+        data(await Configurations.update(configurationId, {
+          maftagsc_healthstate: HEALTH.warning,
+          maftagsc_lastoperationsummary: cleanupWarning,
+        }), 'Save sidecar update cleanup warning');
+      }
+      return configurationEnabled
+        ? validate(configurationId)
+        : map(data(await Configurations.get(configurationId), 'Read updated configuration'), await bindingsFor(configurationId));
     },
     validate,
     async reconcile(id, onProgress) { const configurationId = guid(id, 'Configuration ID'); await mutate(configurationId, 'apply', onProgress); data(await Configurations.update(configurationId, { statecode: 0, statuscode: STATUS.deployed, maftagsc_healthstate: HEALTH.healthy, maftagsc_lastoperationsummary: 'Approved reconciliation completed.' }), 'Complete reconciliation'); return validate(configurationId); },

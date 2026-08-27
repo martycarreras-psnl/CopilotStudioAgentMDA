@@ -30,9 +30,10 @@ import {
   PlayRegular,
   ShieldCheckmarkRegular,
 } from '@fluentui/react-icons';
+import { SidecarEditorDialog } from '@/components/SidecarDetails/SidecarEditorDialog';
 import { HealthBadge, LifecycleBadge } from '@/components/SidecarStatusBadge/SidecarStatusBadge';
 import { OperationProgress } from '@/components/OperationProgress/OperationProgress';
-import type { SidecarConfiguration, SidecarProgress } from '@/types/sidecar-admin-models';
+import type { SidecarConfiguration, SidecarEditModel, SidecarMutableUpdate, SidecarProgress } from '@/types/sidecar-admin-models';
 
 const useStyles = makeStyles({
   page: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXL, paddingBlock: tokens.spacingVerticalXXL },
@@ -59,6 +60,9 @@ interface SidecarDetailsProps {
   loading: boolean;
   busy: boolean;
   error?: string;
+  editModel?: SidecarEditModel;
+  editLoading: boolean;
+  editError?: string;
   report?: {
     active: boolean;
     progress?: SidecarProgress;
@@ -67,13 +71,31 @@ interface SidecarDetailsProps {
     onDownload: () => void;
   };
   onBack: () => void;
+  onEditOpen: () => void;
   onValidate: () => Promise<void>;
+  onUpdate: (update: SidecarMutableUpdate) => Promise<void>;
   onReconcile: () => Promise<void>;
   onSetEnabled: (enabled: boolean) => Promise<void>;
   onUninstall: () => Promise<void>;
 }
 
-export function SidecarDetails({ configuration, loading, busy, error, report, onBack, onValidate, onReconcile, onSetEnabled, onUninstall }: SidecarDetailsProps) {
+export function SidecarDetails({
+  configuration,
+  loading,
+  busy,
+  error,
+  editModel,
+  editLoading,
+  editError,
+  report,
+  onBack,
+  onEditOpen,
+  onValidate,
+  onUpdate,
+  onReconcile,
+  onSetEnabled,
+  onUninstall,
+}: SidecarDetailsProps) {
   const styles = useStyles();
   const [uninstallOpen, setUninstallOpen] = useState(false);
 
@@ -99,6 +121,14 @@ export function SidecarDetails({ configuration, loading, busy, error, report, on
           <div className={styles.badges}><HealthBadge state={configuration.healthState} /><LifecycleBadge state={configuration.lifecycleState} /></div>
         </div>
         <div className={styles.actions}>
+          <SidecarEditorDialog
+            model={editModel}
+            loading={editLoading}
+            busy={busy}
+            error={editError}
+            onOpen={onEditOpen}
+            onSave={onUpdate}
+          />
           <Button icon={<ShieldCheckmarkRegular />} onClick={onValidate} disabled={busy}>Validate health</Button>
           {configuration.lifecycleState === 'disabled'
             ? <Button appearance="primary" icon={<PlayRegular />} onClick={() => onSetEnabled(true)} disabled={busy || configuration.healthState === 'critical'} title={configuration.healthState === 'critical' ? 'Resolve blocking health failures before enabling.' : undefined}>Enable</Button>

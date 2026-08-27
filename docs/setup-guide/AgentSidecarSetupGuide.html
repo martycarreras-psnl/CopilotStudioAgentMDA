@@ -279,20 +279,17 @@
       </div>
       <div class="callout info">
         <div class="t">The order matters</div>
-        Do the Azure registration and Copilot Studio agent <b>first</b> &mdash; you need four values from them (client ID, tenant ID, environment ID, agent schema name) to finish the wizard. Then <b>import the solution</b> (which brings the app with it), <b>map the connection(s)</b>, and run the wizard.
+        Do the Azure registration and publish the Copilot Studio agent <b>first</b>. You need the client ID and tenant ID from Entra; the wizard discovers the current environment's published agents and generates their supported runtime endpoints automatically. Then <b>import the solution</b> (which brings the app with it), <b>map the connection(s)</b>, and run the wizard.
       </div>
       <div class="callout ok">
         <div class="t">No developer tooling required to deploy</div>
         Because the Code App travels inside the solution, an administrator can stand this up entirely from <b>make.powerapps.com</b> with just the solution <code class="inline">.zip</code> &mdash; no Node.js, no PAC CLI, no source repository, no <code class="inline">pac code push</code>.
       </div>
-      <h4>The five values you will collect</h4>
+      <h4>The two identity values you will collect</h4>
       <table class="tbl">
         <tr><th>Value</th><th>Where it comes from</th><th>Secret?</th></tr>
         <tr><td>Application (client) ID</td><td>Entra app registration (Phase 1)</td><td>No</td></tr>
         <tr><td>Directory (tenant) ID</td><td>Entra app registration (Phase 1)</td><td>No</td></tr>
-        <tr><td>Environment ID</td><td>Copilot Studio agent metadata (Phase 2)</td><td>No</td></tr>
-        <tr><td>Agent schema name</td><td>Copilot Studio agent metadata (Phase 2)</td><td>No</td></tr>
-        <tr><td>Agents SDK connection string</td><td>Copilot Studio channel (Phase 2)</td><td>No</td></tr>
       </table>
       <div class="callout ok"><div class="t">No secrets, ever</div>The browser client uses delegated authentication with PKCE. <b>Never</b> create a client secret or certificate for this registration.</div>
     </section>
@@ -339,25 +336,10 @@
             <div class="hint">Entra &rsaquo; app registration Overview (Phase 1).</div>
           </div>
           <div>
-            <label>Environment ID</label>
-            <div class="finput"><input id="w-env" data-key="env" placeholder="00000000-0000-0000-0000-000000000000" /><button type="button" class="fcopy" data-copy="env">Copy</button></div>
-            <div class="hint">Copilot Studio agent metadata (Phase 2).</div>
-          </div>
-          <div>
-            <label>Agent schema name</label>
-            <div class="finput"><input id="w-agent" data-key="agent" placeholder="cr123_myAgent" /><button type="button" class="fcopy" data-copy="agent">Copy</button></div>
-            <div class="hint">Copilot Studio agent metadata (Phase 2).</div>
-          </div>
-          <div>
             <label>Publisher prefix</label>
             <div class="finput"><input id="w-prefix" data-key="prefix" value="maftagsc" /><button type="button" class="fcopy" data-copy="prefix">Copy</button></div>
             <div class="hint">The Core solution ships with <code class="inline">maftagsc</code>. Leave as-is unless you re-published.</div>
           </div>
-        </div>
-        <div style="margin-top:12px">
-          <label>Agents SDK connection string</label>
-          <div class="finput"><input id="w-connstr" data-key="connstr" placeholder="https://…environment.api.powerplatform.com/copilotstudio/…/bots/&lt;schema&gt;?api-version=…" /><button type="button" class="fcopy" data-copy="connstr">Copy</button></div>
-          <div class="hint">Copilot Studio &rsaquo; your agent &rsaquo; <b>Channels &rsaquo; Web app / Microsoft 365 Agents SDK</b>. Copy the connection string (not the iframe embed). Paste it in wizard Step 3.</div>
         </div>
         <div class="callout info" style="margin-bottom:0">
           <div class="t">Computed SPA redirect URI</div>
@@ -446,7 +428,7 @@
     <!-- COPILOT STUDIO -->
     <section id="copilot">
       <h3><span class="badge">2</span> Copilot Studio agent</h3>
-      <p class="sub">Prepare a published agent and collect its environment ID, schema name, and Agents SDK connection string.</p>
+      <p class="sub">Prepare and publish the agent in the same environment as the administration app.</p>
       <div class="callout warn">
         <div class="t">Version note — GA as of 10 July 2026</div>
         These steps target the <b>generally available</b> Copilot Studio experience as of <b>10 Jul 2026</b>. Microsoft updates this product frequently; if a menu label or channel name differs, look for the equivalent under the agent's <b>Settings</b> and <b>Channels</b> areas.
@@ -463,7 +445,7 @@
             <figcaption><b>Figure 2.1</b> — Agent authentication set to Microsoft (Entra ID).</figcaption>
           </figure>
         </li>
-        <li><b>Read the metadata.</b> Open <b>Settings &rsaquo; Advanced &rsaquo; Metadata</b> and copy the <b>Environment ID</b> and <b>Schema name</b> into the <a href="#prereq">worksheet</a>.
+        <li><b>Confirm the metadata.</b> Open <b>Settings &rsaquo; Advanced &rsaquo; Metadata</b> and confirm the agent belongs to the target environment. The administration app reads the environment ID and schema name automatically.
           <figure class="shot">
             <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Settings &rsaquo; Advanced &rsaquo; Metadata</span></div>
               <img src="img/07-cps-metadata.png" alt="CPS metadata" onerror="this.closest('.shot-frame').classList.add('missing')">
@@ -473,8 +455,8 @@
           </figure>
         </li>
         <li><b>Publish the agent.</b> Select <b>Publish</b> (top-right). The sidecar only binds to a <b>published</b> agent.</li>
-        <li><b>Get the Agents SDK connection string.</b> Open <b>Channels</b> and select the <b>Web app</b> / <b>Microsoft 365 Agents SDK</b> channel. Copy the <b>connection string</b> (a URL). You will paste it in wizard Step 3.
-          <div class="callout info"><div class="t">What a valid connection string looks like</div>It must be the complete <b>https</b> URL copied from this channel. Standard-harness URLs include <code class="inline">/dataverse-backed/authenticated/bots/&lt;schema&gt;/conversations</code>. GitHub Copilot harness URLs include <code class="inline">/agenticruntime/3p/dataverse-backed/authenticated/bots/&lt;schema&gt;</code> and might not end in <code class="inline">/conversations</code>. Copy the <b>Agents SDK connection string</b>, <b>not</b> the public iframe embed code.</div>
+        <li><b>Review the Agents SDK channel.</b> Open <b>Channels</b> and select the <b>Web app</b> / <b>Microsoft 365 Agents SDK</b> channel to confirm it is available. The wizard classifies the agent's standard or GitHub Copilot harness and generates the matching endpoint automatically.
+          <div class="callout info"><div class="t">No URL copying required</div>The administration app builds the endpoint from the current environment and published agent metadata, then validates it against the supported Microsoft 365 Agents SDK URL shapes before deployment.</div>
           <figure class="shot">
             <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Channels &rsaquo; Web app / Agents SDK</span></div>
               <img src="img/08-cps-connection-string.png" alt="CPS connection string" onerror="this.closest('.shot-frame').classList.add('missing')">
@@ -592,19 +574,18 @@ pac code push -s AgentSidecarCore</code></pre></div>
       </figure>
 
       <h4>Step 3 — Agent</h4>
-      <p>Connect the published Copilot Studio agent from Phase 2:</p>
+      <p>Select the published Copilot Studio agent from Phase 2:</p>
       <ul>
-        <li>Paste the <b>Agents SDK connection string</b> (from Copilot Studio &rsaquo; Channels).</li>
-        <li>Enter the <b>Environment ID</b>: <code class="inline val" data-bind="env">…</code></li>
-        <li>Select <b>Resolve</b>. The agent's display name appears when resolution succeeds (it must be active and published).</li>
+        <li>Choose the agent from the <b>Published Copilot Studio agent</b> list.</li>
+        <li>Confirm the displayed standard or GitHub Copilot harness classification. The current environment ID and supported Agents SDK endpoint are generated automatically.</li>
         <li>Choose the agent's Copilot Studio logo, upload a custom logo, or keep the default Agent Sidecar icon. Use PNG or JPEG; a square 128&times;128 or 256&times;256 image is recommended. The maximum is 512&times;512 and 256 KB. Transparent PNG works best. SVG uploads are not accepted.</li>
       </ul>
       <figure class="shot">
         <div class="shot-frame"><div class="chrome"><i></i><i></i><i></i><span class="u">Wizard — Step 3 · Agent</span></div>
           <img src="img/14-wizard-agent.png" alt="Wizard agent" onerror="this.closest('.shot-frame').classList.add('missing')">
-          <div class="shot-placeholder"><span class="camera">📷</span><b>Step 3 — Connection string + Environment ID + Resolve</b><div class="file">Save as <code>img/14-wizard-agent.png</code></div></div>
+          <div class="shot-placeholder"><span class="camera">📷</span><b>Step 3 — Published agent + harness + icon</b><div class="file">Save as <code>img/14-wizard-agent.png</code></div></div>
         </div>
-        <figcaption><b>Figure 5.3</b> — Resolving the existing Copilot Studio agent and choosing its sidecar icon.</figcaption>
+        <figcaption><b>Figure 5.3</b> — Selecting a published Copilot Studio agent and choosing its sidecar icon.</figcaption>
       </figure>
 
       <h4>Step 4 — Identity &amp; pane</h4>
@@ -645,6 +626,7 @@ pac code push -s AgentSidecarCore</code></pre></div>
       <h3><span class="badge">6</span> Validate &amp; lifecycle</h3>
       <p class="sub">After deploying, use the portfolio controls to keep the sidecar healthy.</p>
       <div class="grid2">
+        <div class="card"><b>Edit tables &amp; icon</b><p style="color:var(--cp-text-muted);margin:6px 0 0">Refreshes the app's current forms so you can add or remove associations and keep, replace, or reset the icon. The configuration/pane ID, app, agent, Entra identity, binding solution, and conversation history remain unchanged.</p></div>
         <div class="card"><b>Validate / health</b><p style="color:var(--cp-text-muted);margin:6px 0 0">Checks configuration, that each bound form still carries the sidecar handler, delegated identity presence, and the agent reference.</p></div>
         <div class="card"><b>Drift &amp; reconcile</b><p style="color:var(--cp-text-muted);margin:6px 0 0">Detects when a live form's metadata diverges from the approved binding and re-applies the owned handler.</p></div>
         <div class="card"><b>Disable / re-enable</b><p style="color:var(--cp-text-muted);margin:6px 0 0">Turns the sidecar off without removing configuration, then back on.</p></div>
@@ -665,7 +647,7 @@ pac code push -s AgentSidecarCore</code></pre></div>
       <table class="tbl">
         <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
         <tr><td>Sign-in fails with a <b>redirect URI mismatch</b></td><td>The Azure SPA redirect URI doesn't exactly match the wizard's. Re-copy the computed URI (<code class="inline" data-bind="redirect">…</code>) into Entra &rsaquo; Authentication.</td></tr>
-        <tr><td>Agent won't resolve in Step 3</td><td>The agent must be <b>published</b>, <b>active</b>, and <b>Authenticate with Microsoft</b>. Paste the complete https Agents SDK connection string from the Web app channel; GitHub Copilot harness URLs might not end in <code class="inline">/conversations</code>. Confirm the Environment ID matches the app's environment.</td></tr>
+        <tr><td>Agent does not appear in Step 3</td><td>The agent must be <b>published</b>, <b>active</b>, and in the administration app's current environment. Refresh after publishing. Confirm the agent uses <b>Authenticate with Microsoft</b> before deployment.</td></tr>
         <tr><td>"Consent required" / token errors</td><td>Admin consent for <code class="inline">CopilotStudio.Copilots.Invoke</code> was not granted. Re-grant in Entra &rsaquo; API permissions.</td></tr>
         <tr><td>Pane loads but no answer / 401 from agent</td><td>Token-broker plugin secure configuration not set for this environment, or the user lacks chat access to the agent. Set the secure config and share the agent.</td></tr>
         <tr><td>App shows no eligible apps/tables</td><td>Confirm the <b>AgentSidecarCore</b> solution imported successfully (it contains the app + tables) and that the app's <b>connection reference(s)</b> are mapped. The app reads live Dataverse metadata as the signed-in user, who needs System Administrator/Customizer rights.</td></tr>

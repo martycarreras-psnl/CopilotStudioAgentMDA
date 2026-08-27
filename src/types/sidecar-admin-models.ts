@@ -3,6 +3,7 @@ export type SidecarHealthState = 'healthy' | 'warning' | 'critical' | 'notValida
 export type SidecarSurface = 'forms' | 'lists';
 export type SidecarIconSource = 'default' | 'agent' | 'uploaded';
 export type SidecarIconMimeType = 'image/png' | 'image/jpeg';
+export type CopilotStudioHarness = 'standard' | 'github';
 
 export interface SidecarIconContent {
   base64: string;
@@ -21,6 +22,7 @@ export interface TargetForm {
   formId: string;
   name: string;
   enabled: boolean;
+  available?: boolean;
 }
 
 export interface TargetTable {
@@ -92,6 +94,13 @@ export interface AgentResolution {
   icon?: SidecarIconContent;
 }
 
+export interface PublishedAgent extends AgentResolution {
+  botId: string;
+  harness: CopilotStudioHarness;
+  connectionString: string;
+  publishedOn: string;
+}
+
 export interface AdminAccessContext {
   displayName: string;
   isSystemAdministrator: boolean;
@@ -118,7 +127,7 @@ export interface SidecarDraft {
   name: string;
   targetApp: TargetModelDrivenApp;
   tables: TargetTable[];
-  agent: AgentResolution;
+  agent: PublishedAgent;
   agentConnectionString: string;
   tenantId: string;
   publicClientApplicationId: string;
@@ -126,4 +135,16 @@ export interface SidecarDraft {
   paneWidth: number;
   bindingSolutionUniqueName: string;
   icon: SidecarIconSelection;
+}
+
+export interface SidecarEditModel {
+  tables: TargetTable[];
+  agentIcon?: SidecarIconContent;
+  editVersion: string;
+}
+
+export interface SidecarMutableUpdate {
+  tables: TargetTable[];
+  icon?: SidecarIconSelection;
+  expectedEditVersion: string;
 }

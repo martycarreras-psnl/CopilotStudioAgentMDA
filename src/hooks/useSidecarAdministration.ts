@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSidecarAdministrationProvider } from '@/services/sidecar-provider-factory';
-import type { SidecarConfiguration, SidecarDraft, SidecarProgressCallback } from '@/types/sidecar-admin-models';
+import type { SidecarConfiguration, SidecarDraft, SidecarMutableUpdate, SidecarProgressCallback } from '@/types/sidecar-admin-models';
 
 const provider = createSidecarAdministrationProvider();
 
@@ -8,11 +8,17 @@ export const sidecarQueryKeys = {
   access: ['sidecar-admin', 'access'] as const,
   configurations: ['sidecar-admin', 'configurations'] as const,
   configuration: (id: string) => ['sidecar-admin', 'configurations', id] as const,
+  editModel: (id: string) => ['sidecar-admin', 'configurations', id, 'edit'] as const,
   targetApps: ['sidecar-admin', 'target-apps'] as const,
+  publishedAgents: ['sidecar-admin', 'published-agents'] as const,
 };
 
 function useConfigurationMutation<TInput>(
   mutationFn: (input: TInput) => Promise<SidecarConfiguration>,
+  options?: {
+    onSuccess?: (configuration: SidecarConfiguration) => void;
+    onSettled?: () => void;
+  },
 ) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -26,7 +32,9 @@ function useConfigurationMutation<TInput>(
           ? current.map((item) => (item.id === configuration.id ? configuration : item))
           : [configuration, ...current];
       });
+      options?.onSuccess?.(configuration);
     },
+    onSettled: () => options?.onSettled?.(),
   });
 }
 
@@ -53,6 +61,13 @@ export function useTargetApps() {
   return useQuery({ queryKey: sidecarQueryKeys.targetApps, queryFn: () => provider.discoverTargetApps() });
 }
 
+export function usePublishedAgents() {
+  return useQuery({
+    queryKey: sidecarQueryKeys.publishedAgents,
+    queryFn: () => provider.listPublishedAgents(),
+  });
+}
+
 export function useResolveManualTargetApp() {
   return useMutation({ mutationFn: (appId: string) => provider.resolveManualTargetApp(appId) });
 }
@@ -70,6 +85,30 @@ export function useDeploymentPreview() {
 
 export function useDeploySidecar() {
   return useConfigurationMutation((input: { draft: SidecarDraft; onProgress?: SidecarProgressCallback }) => provider.deploy(input.draft, input.onProgress));
+}
+
+export function useSidecarEditModel(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: sidecarQueryKeys.editModel(id ?? 'missing'),
+    queryFn: () => (id ? provider.getEditModel(id) : Promise.reject(new Error('Configuration ID is required.'))),
+    enabled: Boolean(id) && enabled,
+  });
+}
+
+export function useUpdateSidecar() {
+  const queryClient = useQueryClient();
+  return useConfigurationMutation((input: {
+    id: string;
+    update: SidecarMutableUpdate;
+    onProgress?: SidecarProgressCallback;
+  }) => provider.updateMutableConfiguration(input.id, input.update, input.onProgress), {
+    onSuccess: (configuration) => {
+      void queryClient.invalidateQueries({ queryKey: sidecarQueryKeys.editModel(configuration.id) });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: sidecarQueryKeys.configurations });
+    },
+  });
 }
 
 export function useValidateSidecar() {

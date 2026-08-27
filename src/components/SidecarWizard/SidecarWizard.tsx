@@ -3,16 +3,17 @@ import {
   Button,
   Card,
   Checkbox,
+  Dropdown,
   Field as FluentField,
   Input,
   MessageBar,
   MessageBarBody,
   MessageBarTitle,
+  Option,
   ProgressBar,
   SpinButton,
   Spinner,
   Text,
-  Textarea,
   Title1,
   Title2,
   Title3,
@@ -23,7 +24,6 @@ import {
 import {
   ArrowLeftRegular,
   ArrowRightRegular,
-  BotRegular,
   CheckmarkCircleFilled,
   CheckmarkCircleRegular,
   ChevronDownRegular,
@@ -33,8 +33,8 @@ import {
   ShieldKeyholeRegular,
 } from '@fluentui/react-icons';
 import type {
-  AgentResolution,
   DeploymentImpact,
+  PublishedAgent,
   SidecarDraft,
   SidecarProgressCallback,
   TargetModelDrivenApp,
@@ -120,11 +120,12 @@ const useStyles = makeStyles({
 interface SidecarWizardProps {
   apps?: TargetModelDrivenApp[];
   appsLoading: boolean;
+  agents?: PublishedAgent[];
+  agentsLoading: boolean;
   busy: boolean;
   error?: string;
   onCancel: () => void;
   onResolveManualApp: (appId: string) => Promise<TargetModelDrivenApp>;
-  onResolveAgent: (connectionString: string, environmentId: string) => Promise<AgentResolution>;
   onPreview: (draft: SidecarDraft) => Promise<DeploymentImpact[]>;
   onDeploy: (draft: SidecarDraft, onProgress: SidecarProgressCallback) => Promise<void>;
 }
@@ -132,11 +133,12 @@ interface SidecarWizardProps {
 export function SidecarWizard({
   apps = [],
   appsLoading,
+  agents = [],
+  agentsLoading,
   busy,
   error,
   onCancel,
   onResolveManualApp,
-  onResolveAgent,
   onPreview,
   onDeploy,
 }: SidecarWizardProps) {
@@ -146,9 +148,7 @@ export function SidecarWizard({
   const [targetApp, setTargetApp] = useState<TargetModelDrivenApp>();
   const [tables, setTables] = useState<TargetTable[]>([]);
   const [manualAppId, setManualAppId] = useState('');
-  const [agentLink, setAgentLink] = useState('');
-  const [agentEnvironmentId, setAgentEnvironmentId] = useState('');
-  const [agent, setAgent] = useState<AgentResolution>();
+  const [agent, setAgent] = useState<PublishedAgent>();
   const [icon, setIcon] = useState<SidecarDraft['icon']>({ source: 'default' });
   const [tenantId, setTenantId] = useState('');
   const [clientId, setClientId] = useState('');
@@ -211,7 +211,7 @@ export function SidecarWizard({
       targetApp,
       tables,
       agent,
-      agentConnectionString: agentLink,
+      agentConnectionString: agent.connectionString,
       tenantId,
       publicClientApplicationId: clientId,
       paneTitle,
@@ -219,7 +219,7 @@ export function SidecarWizard({
       bindingSolutionUniqueName: solutionName,
       icon,
     };
-  }, [agent, agentLink, clientId, icon, name, paneTitle, paneWidth, solutionName, tables, targetApp, tenantId]);
+  }, [agent, clientId, icon, name, paneTitle, paneWidth, solutionName, tables, targetApp, tenantId]);
 
   const selectApp = (app: TargetModelDrivenApp) => {
     setTargetApp(app);
@@ -237,7 +237,7 @@ export function SidecarWizard({
   const validateStep = (): string | undefined => {
     if (step === 0 && !targetApp) return 'Select a Model-driven App or resolve an App ID.';
     if (step === 1 && enabledTableCount === 0) return 'Enable at least one table.';
-    if (step === 2 && !agent) return 'Resolve the published agent using its Microsoft 365 Agents SDK connection string.';
+    if (step === 2 && !agent) return 'Select a published Copilot Studio agent.';
     if (step === 3 && !name.trim()) return 'Configuration name is required.';
     if (step === 3 && !paneTitle.trim()) return 'Pane title is required.';
     if (step === 3 && !isGuid(tenantId)) return 'Tenant ID must be a valid GUID.';
@@ -266,20 +266,17 @@ export function SidecarWizard({
     catch (caught) { setLocalError(caught instanceof Error ? caught.message : 'App discovery failed.'); }
   };
 
-  const resolveAgent = async () => {
-    if (!isGuid(agentEnvironmentId)) {
-      setLocalError('Enter the Environment ID from Copilot Studio Settings > Advanced > Metadata.');
-      return;
-    }
-    try {
-      const resolved = await onResolveAgent(agentLink, agentEnvironmentId);
-      setAgent(resolved);
-      setIcon(resolved.icon
-        ? { source: 'agent', content: resolved.icon }
+  const selectAgent = (botId: string) => {
+    const selected = agents.find((candidate) => candidate.botId === botId);
+    setAgent(selected);
+    if (!selected) {
+      setIcon({ source: 'default' });
+    } else if (icon.source !== 'uploaded') {
+      setIcon(selected.icon
+        ? { source: 'agent', content: selected.icon }
         : { source: 'default' });
-      setLocalError(undefined);
     }
-    catch (caught) { setAgent(undefined); setLocalError(caught instanceof Error ? caught.message : 'Agent resolution failed.'); }
+    setLocalError(undefined);
   };
 
   const deploy = async () => {
@@ -412,29 +409,44 @@ export function SidecarWizard({
 
           {step === 2 && (
             <div className={styles.stack}>
-              <div><Title2 as="h2">Connect the agent</Title2><Text className={styles.muted}>In Copilot Studio, open the published agent, then go to Channels &gt; Web app. Under Microsoft 365 Agents SDK, copy the connection string—not the public iframe embed code.</Text></div>
-              <ConfigField field="agentConnectionString" label="Microsoft 365 Agents SDK connection string" hint="Paste the full standard- or GitHub-harness URL exactly as Copilot Studio provides it." required>
-                <Textarea resize="vertical" value={agentLink} onChange={(_, data) => { setAgentLink(data.value); setAgent(undefined); setIcon({ source: 'default' }); }} placeholder="Paste the connection string from Channels > Web app" />
+              <div><Title2 as="h2">Select the agent</Title2><Text className={styles.muted}>Published Copilot Studio agents are discovered from this Power Platform environment. The environment and supported connection pattern are configured automatically.</Text></div>
+              <ConfigField label="Published Copilot Studio agent" required>
+                {agentsLoading ? (
+                  <Spinner label="Discovering published agents" />
+                ) : (
+                  <Dropdown
+                    value={agent ? `${agent.displayName} (${agent.schemaName})` : ''}
+                    selectedOptions={agent ? [agent.botId] : []}
+                    placeholder={agents.length ? 'Select an agent' : 'No published agents found'}
+                    onOptionSelect={(_, data) => selectAgent(String(data.optionValue ?? ''))}
+                    disabled={!agents.length}
+                  >
+                    {agents.map((candidate) => (
+                      <Option
+                        key={candidate.botId}
+                        value={candidate.botId}
+                        text={`${candidate.displayName} (${candidate.schemaName})`}
+                      >
+                        {candidate.displayName} — {candidate.schemaName}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                )}
               </ConfigField>
-              <ConfigField field="environmentId" label="Environment ID" hint="Copy this GUID from Copilot Studio Settings > Advanced > Metadata." required>
-                <Input value={agentEnvironmentId} onChange={(_, data) => { setAgentEnvironmentId(data.value); setAgent(undefined); setIcon({ source: 'default' }); }} placeholder="00000000-0000-0000-0000-000000000000" />
+              {agent && <MessageBar intent="success"><MessageBarBody><MessageBarTitle>{agent.displayName}</MessageBarTitle>{agent.schemaName} · published · {agent.harness === 'github' ? 'GitHub Copilot harness' : 'standard harness'} · current environment</MessageBarBody></MessageBar>}
+              {!agentsLoading && !agents.length && <MessageBar intent="warning"><MessageBarBody><MessageBarTitle>No published agents found</MessageBarTitle>Publish an agent in this environment, then reopen the wizard.</MessageBarBody></MessageBar>}
+              <ConfigField
+                field="iconSource"
+                label="Sidecar icon"
+                hint="The selected image is copied into the sidecar's Target Binding solution. Existing panes refresh after the Model-driven App is reloaded."
+              >
+                <SidecarIconPicker
+                  agentIcon={agent?.icon}
+                  value={icon}
+                  onChange={setIcon}
+                  onError={setLocalError}
+                />
               </ConfigField>
-              <Button appearance="primary" icon={<BotRegular />} onClick={resolveAgent} disabled={busy}>Resolve agent</Button>
-              {agent && <MessageBar intent="success"><MessageBarBody><MessageBarTitle>{agent.displayName}</MessageBarTitle>{agent.schemaName} · published · environment {agent.environmentId}</MessageBarBody></MessageBar>}
-              {agent && (
-                <ConfigField
-                  field="iconSource"
-                  label="Sidecar icon"
-                  hint="The selected image is copied into the sidecar's Target Binding solution. Existing panes refresh after the Model-driven App is reloaded."
-                >
-                  <SidecarIconPicker
-                    agentIcon={agent.icon}
-                    value={icon}
-                    onChange={setIcon}
-                    onError={setLocalError}
-                  />
-                </ConfigField>
-              )}
             </div>
           )}
 
